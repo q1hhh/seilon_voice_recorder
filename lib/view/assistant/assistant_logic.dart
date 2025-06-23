@@ -400,10 +400,16 @@ class AssistantLogic extends GetxController {
   Future<void> saveWav(String fileName) async {
     Uint8List pcmData = await MyPcmUtil.decodeAllOpus(Uint8List.fromList(allOpusData));
 
+    var channels = 1;
+    // 双声道
+    if(allOpusData[3] > 40) {
+      channels = 2;
+    }
+
     // final file = File('/storage/emulated/0/Download/output.pcm');
     // await file.writeAsBytes(pcmData);
 
-    Uint8List wavData = pcmToWav(pcmData);
+    Uint8List wavData = pcmToWav(pcmData, channels: channels);
 
     writeToExternalStorage(wavData, fileName);
   }
