@@ -11,6 +11,7 @@ import 'package:Recording_pen/controllers/home_control.dart';
 import 'package:Recording_pen/protocol/BleControlMessage.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/open_u_disk_message.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/open_wifi_message.dart';
+import 'package:Recording_pen/protocol/v1/voice_recorder_message/read_audio_list_count_reply_message.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/screen_control_message.dart';
 import 'package:Recording_pen/util/ByteUtil.dart';
 import 'package:Recording_pen/util/log_util.dart';
@@ -33,7 +34,12 @@ import '../../ble/package/control_message.dart';
 import '../../ble/package/hand_shake_message.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../protocol/v1/voice_recorder_message/readAudioFileListMessage.dart';
+import '../../protocol/v1/voice_recorder_message/read_audio_file_list_reply_message.dart';
+import '../../protocol/v1/voice_recorder_message/read_audio_list_count.dart';
 import '../../protocol/v1/voice_recorder_message/real_time_streaming_message.dart';
+import '../../protocol/v1/voice_recorder_message/tcp_server_message.dart';
+import '../../protocol/v1/voice_recorder_message/tcp_server_parse_message.dart';
 import '../../protocol/v1/voice_recorder_message/wifi_open_message.dart';
 import '../../common/shared/my_configurator.dart';
 import '../../constant/my_app_common.dart';
@@ -44,6 +50,7 @@ import '../../protocol/v1/network_category_message/hand_shake_message.dart';
 import '../../protocol/v1/voice_recorder_message/control_sound_record_message.dart';
 import '../../protocol/v1/voice_recorder_message/get_device_info_message.dart';
 import '../../theme/app_colors.dart';
+import '../../util/tcp_util.dart';
 
 class AssistantLogic extends GetxController {
   var homeLogic = Get.find<HomeControl>();
@@ -59,6 +66,9 @@ class AssistantLogic extends GetxController {
 
   var ssid;
   var apPassword;
+
+  var tcpIp;
+  var tcpPort;
 
   @override
   void onClose() {
@@ -82,6 +92,11 @@ class AssistantLogic extends GetxController {
       { "text": "关闭屏幕亮度", "press": () => screenControl(false) },
       { "text": "打开WIFI", "press": () => openWifi(true) },
       { "text": "关闭WIFI", "press": () => openWifi(false) },
+      { "text": "连接WIFI", "press": () => connectWifi() },
+      { "text": "查询TCP服务", "press": () => readTcpServer() },
+      { "text": "TCP连接", "press": () => connectTcp() },
+      { "text": "读取音频文件列表数量", "press": () => readAudioFileListCount() },
+      { "text": "读取音频文件列表", "press": () => readAudioFileList() },
       { "text": "清空日志", "press": clearLog },
     ]);
   }
@@ -183,6 +198,49 @@ class AssistantLogic extends GetxController {
   openWifi(bool isOpen) {
 
     var bleLockPackage = BleControlPackage.toBleLockPackage(OpenWifiMessage(isOpen), 0);
+    _sendMessage(bleLockPackage);
+  }
+
+  connectWifi() async {
+    // 连接 WPA 网络
+    await WiFiForIoTPlugin.forceWifiUsage(false);
+    if (await WiFiForIoTPlugin.isConnected()) {
+      bool res = await WiFiForIoTPlugin.disconnect();
+      LogUtil.log.i("断开连接的结果--->$res");
+    }
+
+    await Future.delayed(Duration(seconds:2));
+    var connect = await WiFiForIoTPlugin.connect(
+      ssid,
+      password: apPassword,
+      security: NetworkSecurity.WPA,
+      withInternet: true,
+    );
+
+    LogUtil.log.i("连接的结果--->$connect");
+  }
+
+  // 查询TCP服务
+  readTcpServer() {
+    var bleLockPackage = BleControlPackage.toBleLockPackage(TcpServerMessageMessage(), 0);
+    _sendMessage(bleLockPackage);
+  }
+
+  // 连接TCP服务
+  Future<void> connectTcp() async {
+    LogUtil.log.i("连接=====>tcpIp = ${tcpIp.join(".")}, tcpPort = $tcpPort");
+    await TcpUtil().connect(tcpIp.join("."), tcpPort);
+  }
+
+  // 读取音频文件列表数量
+  readAudioFileListCount() {
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioListCount(), 0);
+    _sendMessage(bleLockPackage);
+  }
+
+  // 读取音频文件列表
+  readAudioFileList() {
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(), 0);
     _sendMessage(bleLockPackage);
   }
 
@@ -371,8 +429,30 @@ class AssistantLogic extends GetxController {
 
   dealOpenWifiMessage(BleControlMessage ble) {
     var wifiOpenMessage = WifiOpenMessage(ble);
+    LogUtil.log.i(wifiOpenMessage);
     ssid = wifiOpenMessage.apName;
     apPassword = wifiOpenMessage.apPassword;
+  }
+
+  // 查询TCP服务信息(回复)
+  dealTcpServer(BleControlMessage ble) {
+    var tcpMessage = TcpServerParseMessage(ble);
+    // LogUtil.log.i(tcpMessage);
+    tcpIp = tcpMessage.tcpIp;
+    tcpPort = tcpMessage.tcpPort;
+    ViewLogUtil.info("tcpIp = ${tcpIp.join(".")}, tcpPort = $tcpPort");
+  }
+
+  // 读取音频文件列表数量(回复)
+  dealAudioListCount(BleControlMessage ble) {
+    var audioListCountMessage = ReadAudioListCountReplyMessage(ble);
+    LogUtil.log.i(audioListCountMessage);
+  }
+
+  // 读取音频文件列表(回复)
+  dealAudioList(BleControlMessage ble) {
+    var audioListMessage = ReadAudioFileListReplyMessage(ble);
+    LogUtil.log.i(audioListMessage);
   }
 
   Future<Uint8List> decodeOpusToPCM(Uint8List opusData) async {

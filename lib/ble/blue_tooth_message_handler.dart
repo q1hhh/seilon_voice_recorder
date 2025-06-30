@@ -80,13 +80,33 @@ class BlueToothMessageHandler {
               var find = Get.find<AssistantLogic>();
               find.getControlFeedBack(null);
             }
-
             break;
 
           case LockControlCmd.CMD_RECORDER_OPEN_WIFI:
             if (Get.isRegistered<AssistantLogic>()) {
               var find = Get.find<AssistantLogic>();
               find.dealOpenWifiMessage(ble);
+            }
+            break;
+
+          case LockControlCmd.CMD_RECORDER_QUERY_TCP_SERVICE:
+            if (Get.isRegistered<AssistantLogic>()) {
+              var find = Get.find<AssistantLogic>();
+              find.dealTcpServer(ble);
+            }
+            break;
+
+          case LockControlCmd.CMD_RECORDER_AUDIO_FILE_COUNT:
+            if (Get.isRegistered<AssistantLogic>()) {
+              var find = Get.find<AssistantLogic>();
+              find.dealAudioListCount(ble);
+            }
+            break;
+
+          case LockControlCmd.CMD_RECORDER_AUDIO_FILE_LIST:
+            if (Get.isRegistered<AssistantLogic>()) {
+              var find = Get.find<AssistantLogic>();
+              find.dealAudioList(ble);
             }
             break;
         }

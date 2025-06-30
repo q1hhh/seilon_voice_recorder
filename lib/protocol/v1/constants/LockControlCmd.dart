@@ -35,4 +35,6 @@ class LockControlCmd {
   static const CMD_RECORDER_TIMEOUT_RECORDING_PROMPT= 0x14;//忘记录音提示上报
 
   static const CMD_RECORDER_REAL_TIME_STREAMING   = 0x20;//实时流语音上传
+  static const CMD_RECORDER_AUDIO_FILE_COUNT  = 0x21;//音频文件列表数量读取
+  static const CMD_RECORDER_AUDIO_FILE_LIST   = 0x22;//音频文件列表读取
 }
