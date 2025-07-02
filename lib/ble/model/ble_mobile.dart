@@ -55,7 +55,7 @@ class BleMobile implements BlePlatform {
               // 只有安卓需要设置mtu
               if (Platform.isAndroid) bleDevice.requestMtu(512);
               print("设备${bleDevice.remoteId} 连接成功");
-
+              ViewLogUtil.info("设备 ${bleDevice.remoteId} 连接成功");
               var services = await bleDevice.discoverServices();
               var bleService = services.firstWhere((service) =>
                   service.serviceUuid.str == serviceId);
@@ -82,6 +82,7 @@ class BleMobile implements BlePlatform {
 
             case BluetoothConnectionState.disconnected:
               log.e("disconnect :${bleDevice.remoteId.str}");
+              ViewLogUtil.error("设备 ${bleDevice.remoteId} 已断开");
               BlueToothMessageHandler().handleConnectState(bleDevice.remoteId.str, false);
               deviceConnectLogic.streamSubscription[bleDevice.remoteId.str]?.cancel();
               deviceConnectLogic.cleanDevice(bleDevice.remoteId.str);

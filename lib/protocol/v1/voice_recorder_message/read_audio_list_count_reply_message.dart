@@ -3,7 +3,7 @@ import 'package:Recording_pen/util/ByteUtil.dart';
 import 'package:Recording_pen/util/log_util.dart';
 
 class ReadAudioListCountReplyMessage extends BleControlMessage {
-  int? fileCount; // 总数量
+  int? fileCount; // 音频文件总数量
   int? pageCount; // 单页最大数量
   int? maxFileContentLength; // 单次拉取的文件内容最大长度
 
@@ -15,9 +15,9 @@ class ReadAudioListCountReplyMessage extends BleControlMessage {
     data = ble.data;
 
     if (ble.isSuccess()) {
-      fileCount = ByteUtil.getInt2(data, 1);
-      pageCount = data[3];
-      fileCount = ByteUtil.getInt2(data, 4);
+      fileCount = ByteUtil.getInt(data, 1);
+      pageCount = data[5];
+      maxFileContentLength = ByteUtil.getInt2(data, 6);
     }
 
   }

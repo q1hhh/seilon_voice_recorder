@@ -240,7 +240,7 @@ class AssistantLogic extends GetxController {
 
   // 读取音频文件列表
   readAudioFileList() {
-    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(), 0);
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(1, 5), 0);
     _sendMessage(bleLockPackage);
   }
 
@@ -478,6 +478,7 @@ class AssistantLogic extends GetxController {
 
 
   Future<void> saveWav(String fileName) async {
+    LogUtil.log.i("录音数据--->$allOpusData");
     Uint8List pcmData = await MyPcmUtil.decodeAllOpus(Uint8List.fromList(allOpusData));
 
     var channels = 1;
@@ -529,7 +530,7 @@ class AssistantLogic extends GetxController {
 
     return header.toBytes();
   }
-
+  
   Uint8List _intToBytes(int value, int byteCount) {
     final bytes = ByteData(byteCount);
     if (byteCount == 2) {
