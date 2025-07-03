@@ -240,7 +240,7 @@ class AssistantLogic extends GetxController {
 
   // 读取音频文件列表
   readAudioFileList() {
-    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(1, 5), 0);
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(0, 5), 0);
     _sendMessage(bleLockPackage);
   }
 
