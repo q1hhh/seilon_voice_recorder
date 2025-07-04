@@ -117,7 +117,7 @@ class AssistantLogic extends GetxController {
       { "text": "读取音频文件列表数量", "press": () => readAudioFileListCount() },
       { "text": "读取音频文件列表", "press": () => readAudioFileList() },
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
-      { "text": "删除单个文件", "press": () => removeAudioFile(fileList[3]['fileName']) },
+      { "text": "删除单个文件", "press": () => removeAudioFile(fileList[0]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
@@ -272,8 +272,8 @@ class AssistantLogic extends GetxController {
   readAudioFileContent() {
     if(fileList.isEmpty) return;
     fileList_content = [];
-    var fileName = fileList[3]['fileName'];
-    var fileSize = fileList[3]['fileSize'];
+    var fileName = fileList[0]['fileName'];
+    var fileSize = fileList[0]['fileSize'];
     print("读取的文件--$fileName--$fileSize");
 
     currentFileName = fileName;
@@ -466,13 +466,15 @@ class AssistantLogic extends GetxController {
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/$fileName');
 
-      // 以追加模式写入内容
-      await file.writeAsBytes(
-        Uint8List.fromList(data),
-        mode: FileMode.append, // 追加模式
-      );
+      // 如果文件存在，先删除
+      if (await file.exists()) {
+        await file.delete();
+      }
 
-      print('文件已追加写入至: ${file.path}');
+      // 再写入新文件
+      await file.writeAsBytes(Uint8List.fromList(data));
+
+      print('文件已写入至: ${file.path}');
       fileList_content = [];
     } catch (e) {
       print('写入失败: $e');
@@ -535,7 +537,8 @@ class AssistantLogic extends GetxController {
   // 读取音频文件列表数量(回复)
   dealAudioListCount(BleControlMessage ble) {
     var audioListCountMessage = ReadAudioListCountReplyMessage(ble);
-    LogUtil.log.i(audioListCountMessage);
+    // LogUtil.log.i(audioListCountMessage);
+    ViewLogUtil.info("文件数量--->${audioListCountMessage}");
     fileListCount.value = audioListCountMessage.fileCount ?? 0;
   }
 
@@ -552,7 +555,7 @@ class AssistantLogic extends GetxController {
     var audioListCountMessage = ReadAudioFileContentReplyMessage(ble);
     LogUtil.log.i("收到的长度${audioListCountMessage.fileContent?.length}");
     fileList_content.addAll(audioListCountMessage.fileContent as List<int>);
-    // 将内容存在本地currentFileName
+    // 将内容存在本地
     if ((currentFileSize == fileList_content.length) && await requestStoragePermission()) {
       await writeToFile(fileList_content as List<int>, currentFileName);
     }
