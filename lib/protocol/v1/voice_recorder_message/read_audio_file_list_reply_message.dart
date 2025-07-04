@@ -8,7 +8,6 @@ class ReadAudioFileListReplyMessage extends BleControlMessage {
 
   ReadAudioFileListReplyMessage(BleControlMessage ble) {
     fileList = [];
-    LogUtil.log.i("读取文件列表===>$ble");
     cmd = ble.cmd;
     cmdCategory = ble.cmdCategory;
 
@@ -25,24 +24,19 @@ class ReadAudioFileListReplyMessage extends BleControlMessage {
 
         // 文件名长度
         int nameLen = data[offset];
-        // LogUtil.log.i("文件名长度===>$nameLen");
         offset += 1;
 
         // 文件名
         List<int> nameBytes = data.sublist(offset, offset + nameLen);
-        // LogUtil.log.i("文件名===>$nameBytes");
 
         String fileName = String.fromCharCodes(nameBytes);
         offset += nameLen;
-        // LogUtil.log.i("文件名解析了的===>$fileName");
 
 
         // 文件大小
         if (offset + 4 > data.length) break;
-        // LogUtil.log.i("文件大小===>$data.sublist(offset, offset + 4)");
 
         int fileSize = ByteUtil.getInt(data.sublist(offset, offset + 4), 0);
-        // LogUtil.log.i("文件解析了的大小===>$fileSize");
 
         offset += 4;
 

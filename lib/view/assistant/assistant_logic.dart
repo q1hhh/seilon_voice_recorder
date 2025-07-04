@@ -55,9 +55,18 @@ import '../../protocol/v1/voice_recorder_message/control_sound_record_message.da
 import '../../protocol/v1/voice_recorder_message/get_device_info_message.dart';
 import '../../theme/app_colors.dart';
 import '../../util/tcp_util.dart';
+import 'package:path/path.dart' as path;
 
 class AssistantLogic extends GetxController {
   var homeLogic = Get.find<HomeControl>();
+
+  // 读取内容的文件名
+  var currentFileName;
+  // 读取内容的文件大小
+  var currentFileSize;
+  
+  // 暂存读取文件的内容
+  List<int> fileList_content = [];
 
   // 读取文件列表的数量
   RxInt fileListCount = 0.obs;
@@ -108,8 +117,9 @@ class AssistantLogic extends GetxController {
       { "text": "读取音频文件列表数量", "press": () => readAudioFileListCount() },
       { "text": "读取音频文件列表", "press": () => readAudioFileList() },
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
-      { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
+      { "text": "删除单个文件", "press": () => removeAudioFile(fileList[3]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
+      { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
     ]);
   }
@@ -261,17 +271,61 @@ class AssistantLogic extends GetxController {
   // 读取单个音频文件内容
   readAudioFileContent() {
     if(fileList.isEmpty) return;
-    var fileName = fileList[2]['fileName'];
-    print("读取的文件--$fileName");
-    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(fileName, 0, 900), 0);
-    _sendMessage(bleLockPackage);
+    fileList_content = [];
+    var fileName = fileList[3]['fileName'];
+    var fileSize = fileList[3]['fileSize'];
+    print("读取的文件--$fileName--$fileSize");
+
+    currentFileName = fileName;
+    currentFileSize = fileSize;
+
+    // 每次读取900字节
+    int chunkSize = 900;
+    int readNum = 0;
+
+    for (int offset = 0; offset < fileSize; offset += chunkSize) {
+      readNum++;
+      int len = (fileSize - offset) >= chunkSize ? chunkSize : (fileSize - offset);
+      LogUtil.log.i("读取次数===>${readNum}----读取的长度${len}");
+
+      var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(fileName, offset, len), 0);
+      _sendMessage(bleLockPackage);
+    }
+
   }
 
   // 删除文件
   removeAudioFile(String? fileName) {
     if(fileList.isEmpty) return;
+    LogUtil.log.i("删除的文件名--->$fileName");
     var bleLockPackage = BleControlPackage.toBleLockPackage(RemoveAudioFile(fileName), 0);
     _sendMessage(bleLockPackage);
+  }
+
+  // 清空本地的所有的opus文件
+  Future<void> clearOpusFiles() async {
+    try {
+      final directory = await getApplicationDocumentsDirectory();
+      final dir = Directory(directory.path);
+
+      // 获取所有文件
+      final files = dir.listSync();
+      for (var entity in files) {
+        // 只处理文件，不处理文件夹
+        if (entity is File) {
+          final ext = path.extension(entity.path);
+          if (ext == '.opus') {
+            await entity.delete();
+            print('已删除: ${entity.path}');
+          }
+        }
+      }
+      ViewLogUtil.info("目录下所有文件已清空");
+
+    } catch (e) {
+      print('删除文件失败: $e');
+      ViewLogUtil.info("删除文件失败");
+    }
   }
 
 
@@ -412,9 +466,14 @@ class AssistantLogic extends GetxController {
       final directory = await getApplicationDocumentsDirectory();
       final file = File('${directory.path}/$fileName');
 
-      await file.writeAsBytes(Uint8List.fromList(data));
+      // 以追加模式写入内容
+      await file.writeAsBytes(
+        Uint8List.fromList(data),
+        mode: FileMode.append, // 追加模式
+      );
 
-      print('文件已保存至: ${file.path}');
+      print('文件已追加写入至: ${file.path}');
+      fileList_content = [];
     } catch (e) {
       print('写入失败: $e');
     }
@@ -489,9 +548,14 @@ class AssistantLogic extends GetxController {
   }
 
   // 读取音频文件内容(回复)
-  dealAudioFileContent(BleControlMessage ble) {
+  dealAudioFileContent(BleControlMessage ble) async {
     var audioListCountMessage = ReadAudioFileContentReplyMessage(ble);
-    LogUtil.log.i(audioListCountMessage);
+    LogUtil.log.i("收到的长度${audioListCountMessage.fileContent?.length}");
+    fileList_content.addAll(audioListCountMessage.fileContent as List<int>);
+    // 将内容存在本地currentFileName
+    if ((currentFileSize == fileList_content.length) && await requestStoragePermission()) {
+      await writeToFile(fileList_content as List<int>, currentFileName);
+    }
   }
 
   Future<Uint8List> decodeOpusToPCM(Uint8List opusData) async {

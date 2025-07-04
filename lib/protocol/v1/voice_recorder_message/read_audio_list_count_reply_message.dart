@@ -8,7 +8,6 @@ class ReadAudioListCountReplyMessage extends BleControlMessage {
   int? maxFileContentLength; // 单次拉取的文件内容最大长度
 
   ReadAudioListCountReplyMessage(BleControlMessage ble) {
-    LogUtil.log.i("读取文件列表数量===》$ble");
     cmd = ble.cmd;
     cmdCategory = ble.cmdCategory;
 

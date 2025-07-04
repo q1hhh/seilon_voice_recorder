@@ -104,7 +104,8 @@ class ByteUtil {
 
   /// 将（utf-8）字符串转为十进制数组，不够40长度补0
   static List<int> toFixedLengthBytes(String str, {int length = 40}) {
-    List<int> bytes = utf8.encode(str);
+    List<int> bytes = str.codeUnits;
+
     if (bytes.length >= length) {
       return bytes.sublist(0, length); // 超长截断
     }

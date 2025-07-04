@@ -13,7 +13,7 @@ class ReadAudioFileContentMessage extends BleControlMessage {
     data = Uint8List(46);
 
     data.setRange(0, 40, ByteUtil.toFixedLengthBytes(fileName));
-    LogUtil.log.i("名称--->${ByteUtil.toFixedLengthBytes(fileName)}");
+    // LogUtil.log.i("名称--->${ByteUtil.toFixedLengthBytes(fileName)}");
     data.setRange(40, 44, ByteUtil.getUint8ListOfInt(start));
     data.setRange(44, 46, ByteUtil.getUint8ListOfInt2(length));
   }
