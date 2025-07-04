@@ -37,4 +37,7 @@ class LockControlCmd {
   static const CMD_RECORDER_REAL_TIME_STREAMING   = 0x20;//实时流语音上传
   static const CMD_RECORDER_AUDIO_FILE_COUNT  = 0x21;//音频文件列表数量读取
   static const CMD_RECORDER_AUDIO_FILE_LIST   = 0x22;//音频文件列表读取
+  static const CMD_RECORDER_AUDIO_FILE_CONTENT   = 0x23;//单个音频文件读取
+  static const CMD_RECORDER_AUDIO_FILE_REMOVE   = 0x24;//单个音频文件读取删除
+  static const CMD_RECORDER_AUDIO_FILE_REMOVE_ALL   = 0x25;//全部音频文件读取删除
 }

@@ -12,6 +12,7 @@ import 'package:Recording_pen/protocol/BleControlMessage.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/open_u_disk_message.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/open_wifi_message.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/read_audio_list_count_reply_message.dart';
+import 'package:Recording_pen/protocol/v1/voice_recorder_message/remove_audio_file.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/screen_control_message.dart';
 import 'package:Recording_pen/util/ByteUtil.dart';
 import 'package:Recording_pen/util/log_util.dart';
@@ -34,7 +35,10 @@ import '../../ble/package/control_message.dart';
 import '../../ble/package/hand_shake_message.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../protocol/v1/constants/LockControlCmd.dart';
 import '../../protocol/v1/voice_recorder_message/readAudioFileListMessage.dart';
+import '../../protocol/v1/voice_recorder_message/read_audio_file_content_message.dart';
+import '../../protocol/v1/voice_recorder_message/read_audio_file_content_reply_message.dart';
 import '../../protocol/v1/voice_recorder_message/read_audio_file_list_reply_message.dart';
 import '../../protocol/v1/voice_recorder_message/read_audio_list_count.dart';
 import '../../protocol/v1/voice_recorder_message/real_time_streaming_message.dart';
@@ -54,6 +58,12 @@ import '../../util/tcp_util.dart';
 
 class AssistantLogic extends GetxController {
   var homeLogic = Get.find<HomeControl>();
+
+  // 读取文件列表的数量
+  RxInt fileListCount = 0.obs;
+
+  //读取到的文件列表
+  RxList fileList = [].obs;
 
   // 按钮列表(读取信息)
   RxList actionBtnList = [].obs;
@@ -97,6 +107,9 @@ class AssistantLogic extends GetxController {
       { "text": "TCP连接", "press": () => connectTcp() },
       { "text": "读取音频文件列表数量", "press": () => readAudioFileListCount() },
       { "text": "读取音频文件列表", "press": () => readAudioFileList() },
+      { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
+      { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
+      { "text": "删除所有文件", "press": () => removeAudioFile(null) },
       { "text": "清空日志", "press": clearLog },
     ]);
   }
@@ -240,7 +253,24 @@ class AssistantLogic extends GetxController {
 
   // 读取音频文件列表
   readAudioFileList() {
-    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(0, 5), 0);
+    if(fileListCount.value == 0) return;
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(0, fileListCount.value), 0);
+    _sendMessage(bleLockPackage);
+  }
+
+  // 读取单个音频文件内容
+  readAudioFileContent() {
+    if(fileList.isEmpty) return;
+    var fileName = fileList[2]['fileName'];
+    print("读取的文件--$fileName");
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(fileName, 0, 900), 0);
+    _sendMessage(bleLockPackage);
+  }
+
+  // 删除文件
+  removeAudioFile(String? fileName) {
+    if(fileList.isEmpty) return;
+    var bleLockPackage = BleControlPackage.toBleLockPackage(RemoveAudioFile(fileName), 0);
     _sendMessage(bleLockPackage);
   }
 
@@ -447,12 +477,21 @@ class AssistantLogic extends GetxController {
   dealAudioListCount(BleControlMessage ble) {
     var audioListCountMessage = ReadAudioListCountReplyMessage(ble);
     LogUtil.log.i(audioListCountMessage);
+    fileListCount.value = audioListCountMessage.fileCount ?? 0;
   }
 
   // 读取音频文件列表(回复)
   dealAudioList(BleControlMessage ble) {
     var audioListMessage = ReadAudioFileListReplyMessage(ble);
-    LogUtil.log.i(audioListMessage);
+    // LogUtil.log.i(audioListMessage.fileList?.length);
+    fileList.value = audioListMessage.fileList ?? [];
+    ViewLogUtil.info(audioListMessage.toString());
+  }
+
+  // 读取音频文件内容(回复)
+  dealAudioFileContent(BleControlMessage ble) {
+    var audioListCountMessage = ReadAudioFileContentReplyMessage(ble);
+    LogUtil.log.i(audioListCountMessage);
   }
 
   Future<Uint8List> decodeOpusToPCM(Uint8List opusData) async {
