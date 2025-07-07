@@ -12,6 +12,8 @@ class DeviceInfoController extends GetxController {
 
   DeviceInfoController._internal();
 
+  // 数据通信模式
+  RxString messageType = "BLE".obs;
   RxString ssid = "".obs;
   RxString password = "".obs;
 

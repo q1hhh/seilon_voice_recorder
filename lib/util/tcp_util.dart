@@ -1,6 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:Recording_pen/util/view_log_util.dart';
+import 'package:get_storage/get_storage.dart';
+
+import '../ble/blue_tooth_message_handler.dart';
+
 class TcpUtil {
   static final TcpUtil _instance = TcpUtil._internal();
 
@@ -21,19 +26,20 @@ class TcpUtil {
     try {
       _socket = await Socket.connect(tcpIp, tcpPort);
       print('Connected to: ${_socket!.remoteAddress.address}:${_socket!.remotePort}');
+      ViewLogUtil.info('TCP连接成功--->${_socket!.remoteAddress.address}:${_socket!.remotePort}');
       startListen();
     } catch (e) {
-      print("连接失败: $e");
+      ViewLogUtil.error("TCP连接失败");
       close();
     }
   }
 
   // 发送数据
-  void sendData(String data) {
+  void sendData(List<int> data) {
     if (_socket != null) {
-      _socket!.add(utf8.encode(data));
+      _socket!.add(data);
     } else {
-      print("tcp未连接，无法发送数据");
+      print("TCP未连接，无法发送数据");
     }
   }
 
@@ -41,14 +47,16 @@ class TcpUtil {
   void startListen() {
     _socket?.listen(
       (data) {
-        print('收到tcpServer---->: ${data}');
+        ViewLogUtil.info('收到TCP服务器响应--->$data');
+        var deviceInfo = GetStorage().read("deviceInfo");
+        BlueToothMessageHandler().handleMessage(data, deviceInfo["deviceId"]);
       },
       onError: (error) {
-        print('连接异常: $error');
+        ViewLogUtil.error('TCP连接异常: $error');
         close();
       },
       onDone: () {
-        print('连接关闭！');
+        ViewLogUtil.error("TCP连接关闭");
         close();
       },
       cancelOnError: true
@@ -60,6 +68,6 @@ class TcpUtil {
     await _socket?.close();
     _socket?.destroy();
     _socket = null;
-    print('tcp连接已手动关闭');
+    ViewLogUtil.info('TCP连接已手动关闭');
   }
 }

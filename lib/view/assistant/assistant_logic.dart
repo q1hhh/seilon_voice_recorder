@@ -97,8 +97,8 @@ class AssistantLogic extends GetxController {
       { "text": "开始握手", "press": startHandShake },
       { "text": "完成绑定", "press": completeBinding },
       { "text": "获取设备信息New", "press": getDeviceInfoV2 },
-      { "text": "开启录音(录音模式)", "press": () => controlSoundRecording(1, 0) },
-      { "text": "开启录音(会议模式)", "press": () => controlSoundRecording(1, 1) },
+      { "text": "开启录音(通话录音模式)", "press": () => controlSoundRecording(1, 0) },
+      { "text": "开启录音(会议录音模式)", "press": () => controlSoundRecording(1, 1) },
       { "text": "关闭录音New", "press": () => controlSoundRecording(0, 0) },
       { "text": "打开U盘", "press": () => openUDisk(true) },
       { "text": "关闭U盘", "press": () => openUDisk(false) },
@@ -109,6 +109,7 @@ class AssistantLogic extends GetxController {
       { "text": "连接WIFI", "press": () => connectWifi() },
       { "text": "查询TCP服务", "press": () => readTcpServer() },
       { "text": "TCP连接", "press": () => connectTcp() },
+      { "text": "切换通信模式(BLE/TCP)", "press": () => changeType() },
       { "text": "读取音频文件列表数量", "press": () => readAudioFileListCount() },
       { "text": "读取音频文件列表", "press": () => readAudioFileList() },
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
@@ -267,6 +268,12 @@ class AssistantLogic extends GetxController {
     await TcpUtil().connect(DeviceInfoController().tcpIp.value, DeviceInfoController().tcpPort.value);
   }
 
+  // 切换通信模式
+  void changeType() {
+    DeviceInfoController().messageType.value = DeviceInfoController().messageType.value == "BLE" ? "TCP" : "BLE";
+    ViewLogUtil.warn("当前通信模式${DeviceInfoController().messageType}");
+  }
+
   // 读取音频文件列表数量
   readAudioFileListCount() {
     var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioListCount(), 0);
@@ -351,18 +358,25 @@ class AssistantLogic extends GetxController {
   void _sendMessage(BleControlPackage bleLockPackage) {
     var bytes = bleLockPackage.toBytes(MyAppCommon.DEVICE_DEFAULT_KEY);
 
-    // 从连接的设备列表中找到对应的设备对象
-    var connectedDevices = BleService().getConnectedDevices();
-    var deviceMatches = connectedDevices.where(
-            (device) => device.remoteId.str == deviceInfo["deviceId"]
-    );
+    if(DeviceInfoController().messageType.value == "BLE") {
+      // 从连接的设备列表中找到对应的设备对象
+      var connectedDevices = BleService().getConnectedDevices();
+      var deviceMatches = connectedDevices.where(
+              (device) => device.remoteId.str == deviceInfo["deviceId"]
+      );
 
-    if (deviceMatches.isNotEmpty) {
-      var targetDevice = deviceMatches.first;
-      BleService().writeData(targetDevice, bytes);
-    } else {
-      LogUtil.log.e("设备未连接或找不到设备: ${deviceInfo["deviceId"]}");
+      if (deviceMatches.isNotEmpty) {
+        var targetDevice = deviceMatches.first;
+        BleService().writeData(targetDevice, bytes);
+      } else {
+        LogUtil.log.e("设备未连接或找不到设备: ${deviceInfo["deviceId"]}");
+      }
     }
+    // TCP模式
+    else {
+      TcpUtil().sendData(bytes);
+    }
+
   }
 
   // 断开连接
@@ -532,6 +546,7 @@ class AssistantLogic extends GetxController {
 
   dealOpenWifiMessage(BleControlMessage ble) {
     var wifiOpenMessage = WifiOpenMessage(ble);
+    // LogUtil.log.i(wifiOpenMessage);
     DeviceInfoController().ssid.value = wifiOpenMessage.apName ?? "";
     DeviceInfoController().password.value = wifiOpenMessage.apPassword ?? "";
     ViewLogUtil.info("wifi名称： ${DeviceInfoController().ssid}, wifi密码: ${ DeviceInfoController().password}");
