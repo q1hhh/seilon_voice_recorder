@@ -33,7 +33,7 @@ class TcpUtil {
     if (_socket != null) {
       _socket!.add(utf8.encode(data));
     } else {
-      print("未连接，无法发送数据");
+      print("tcp未连接，无法发送数据");
     }
   }
 
@@ -41,7 +41,7 @@ class TcpUtil {
   void startListen() {
     _socket?.listen(
       (data) {
-        print('收到Server---->: ${data}');
+        print('收到tcpServer---->: ${data}');
       },
       onError: (error) {
         print('连接异常: $error');
@@ -56,10 +56,10 @@ class TcpUtil {
   }
   
   // 主动关闭连接
-  void close() async {
+  Future<void> close() async {
     await _socket?.close();
     _socket?.destroy();
     _socket = null;
-    print('连接已手动关闭');
+    print('tcp连接已手动关闭');
   }
 }

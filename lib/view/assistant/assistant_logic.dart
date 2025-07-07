@@ -35,6 +35,7 @@ import '../../ble/package/control_message.dart';
 import '../../ble/package/hand_shake_message.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../controllers/deviceInfo_control.dart';
 import '../../protocol/v1/constants/LockControlCmd.dart';
 import '../../protocol/v1/voice_recorder_message/readAudioFileListMessage.dart';
 import '../../protocol/v1/voice_recorder_message/read_audio_file_content_message.dart';
@@ -82,12 +83,6 @@ class AssistantLogic extends GetxController {
   int lastSentCommandId = -1;
 
   final int turnOffRecording = 0x0300;
-
-  var ssid;
-  var apPassword;
-
-  var tcpIp;
-  var tcpPort;
 
   @override
   void onClose() {
@@ -218,29 +213,43 @@ class AssistantLogic extends GetxController {
   }
 
   //打开WIFI
-  openWifi(bool isOpen) {
-
+  openWifi(bool isOpen) async {
+    if(!isOpen) {
+      bool res = await WiFiForIoTPlugin.disconnect();
+      if(res) {
+        LogUtil.log.i("wifi: ${DeviceInfoController().ssid.value} 已断开 ==> $res");
+        await TcpUtil().close();
+        DeviceInfoController().cleanInfo();
+      }
+    }
     var bleLockPackage = BleControlPackage.toBleLockPackage(OpenWifiMessage(isOpen), 0);
     _sendMessage(bleLockPackage);
   }
 
+  // 连接wifi
   connectWifi() async {
     // 连接 WPA 网络
-    await WiFiForIoTPlugin.forceWifiUsage(false);
+    // 传true，强制使用wifi
+    await WiFiForIoTPlugin.forceWifiUsage(true);
     if (await WiFiForIoTPlugin.isConnected()) {
       bool res = await WiFiForIoTPlugin.disconnect();
-      LogUtil.log.i("断开连接的结果--->$res");
+      LogUtil.log.i("连接前断开的结果--->$res");
     }
 
     await Future.delayed(Duration(seconds:2));
     var connect = await WiFiForIoTPlugin.connect(
-      ssid,
-      password: apPassword,
+      DeviceInfoController().ssid.value,
+      password: DeviceInfoController().password.value,
       security: NetworkSecurity.WPA,
       withInternet: true,
     );
 
-    LogUtil.log.i("连接的结果--->$connect");
+    if(connect) {
+      ViewLogUtil.info("wifi: ${ DeviceInfoController().ssid.value} 连接成功");
+    }
+    else {
+      ViewLogUtil.error("wifi: ${ DeviceInfoController().ssid.value} 连接失败");
+    }
   }
 
   // 查询TCP服务
@@ -251,8 +260,11 @@ class AssistantLogic extends GetxController {
 
   // 连接TCP服务
   Future<void> connectTcp() async {
-    LogUtil.log.i("连接=====>tcpIp = ${tcpIp.join(".")}, tcpPort = $tcpPort");
-    await TcpUtil().connect(tcpIp.join("."), tcpPort);
+    if(DeviceInfoController().tcpIp.value.isEmpty || DeviceInfoController().tcpPort.value == 0) {
+      return;
+    }
+    LogUtil.log.i("开始连接=====>tcpIp = ${DeviceInfoController().tcpIp}, tcpPort = ${DeviceInfoController().tcpPort}");
+    await TcpUtil().connect(DeviceInfoController().tcpIp.value, DeviceInfoController().tcpPort.value);
   }
 
   // 读取音频文件列表数量
@@ -520,18 +532,18 @@ class AssistantLogic extends GetxController {
 
   dealOpenWifiMessage(BleControlMessage ble) {
     var wifiOpenMessage = WifiOpenMessage(ble);
-    LogUtil.log.i(wifiOpenMessage);
-    ssid = wifiOpenMessage.apName;
-    apPassword = wifiOpenMessage.apPassword;
+    DeviceInfoController().ssid.value = wifiOpenMessage.apName ?? "";
+    DeviceInfoController().password.value = wifiOpenMessage.apPassword ?? "";
+    ViewLogUtil.info("wifi名称： ${DeviceInfoController().ssid}, wifi密码: ${ DeviceInfoController().password}");
   }
 
   // 查询TCP服务信息(回复)
   dealTcpServer(BleControlMessage ble) {
     var tcpMessage = TcpServerParseMessage(ble);
     // LogUtil.log.i(tcpMessage);
-    tcpIp = tcpMessage.tcpIp;
-    tcpPort = tcpMessage.tcpPort;
-    ViewLogUtil.info("tcpIp = ${tcpIp.join(".")}, tcpPort = $tcpPort");
+    DeviceInfoController().tcpIp.value = tcpMessage.tcpIp?.join(".") ?? "";
+    DeviceInfoController().tcpPort.value = tcpMessage.tcpPort ?? 0;
+    ViewLogUtil.info("tcpIp = ${DeviceInfoController().tcpIp}, tcpPort = ${DeviceInfoController().tcpPort}");
   }
 
   // 读取音频文件列表数量(回复)
