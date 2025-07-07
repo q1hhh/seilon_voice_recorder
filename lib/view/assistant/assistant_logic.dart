@@ -18,6 +18,7 @@ import 'package:Recording_pen/util/ByteUtil.dart';
 import 'package:Recording_pen/util/log_util.dart';
 import 'package:Recording_pen/util/my_pcm_util.dart';
 import 'package:Recording_pen/util/view_log_util.dart';
+import 'package:app_settings/app_settings.dart';
 import 'package:date_format/date_format.dart';
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/material.dart';
@@ -57,6 +58,7 @@ import '../../protocol/v1/voice_recorder_message/get_device_info_message.dart';
 import '../../theme/app_colors.dart';
 import '../../util/tcp_util.dart';
 import 'package:path/path.dart' as path;
+import 'package:flutter/services.dart';
 
 class AssistantLogic extends GetxController {
   var homeLogic = Get.find<HomeControl>();
@@ -113,7 +115,7 @@ class AssistantLogic extends GetxController {
       { "text": "读取音频文件列表数量", "press": () => readAudioFileListCount() },
       { "text": "读取音频文件列表", "press": () => readAudioFileList() },
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
-      { "text": "删除单个文件", "press": () => removeAudioFile(fileList[0]['fileName']) },
+      { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
@@ -229,28 +231,31 @@ class AssistantLogic extends GetxController {
 
   // 连接wifi
   connectWifi() async {
+    Clipboard.setData(ClipboardData(text: DeviceInfoController().password.value));
+    AppSettings.openAppSettings(type: AppSettingsType.wifi);
+
     // 连接 WPA 网络
     // 传true，强制使用wifi
-    await WiFiForIoTPlugin.forceWifiUsage(true);
-    if (await WiFiForIoTPlugin.isConnected()) {
-      bool res = await WiFiForIoTPlugin.disconnect();
-      LogUtil.log.i("连接前断开的结果--->$res");
-    }
-
-    await Future.delayed(Duration(seconds:2));
-    var connect = await WiFiForIoTPlugin.connect(
-      DeviceInfoController().ssid.value,
-      password: DeviceInfoController().password.value,
-      security: NetworkSecurity.WPA,
-      withInternet: true,
-    );
-
-    if(connect) {
-      ViewLogUtil.info("wifi: ${ DeviceInfoController().ssid.value} 连接成功");
-    }
-    else {
-      ViewLogUtil.error("wifi: ${ DeviceInfoController().ssid.value} 连接失败");
-    }
+    // await WiFiForIoTPlugin.forceWifiUsage(true);
+    // if (await WiFiForIoTPlugin.isConnected()) {
+    //   bool res = await WiFiForIoTPlugin.disconnect();
+    //   LogUtil.log.i("连接前断开的结果--->$res");
+    // }
+    //
+    // await Future.delayed(Duration(seconds:2));
+    // var connect = await WiFiForIoTPlugin.connect(
+    //   DeviceInfoController().ssid.value,
+    //   password: DeviceInfoController().password.value,
+    //   security: NetworkSecurity.WPA,
+    //   withInternet: true,
+    // );
+    //
+    // if(connect) {
+    //   ViewLogUtil.info("wifi: ${ DeviceInfoController().ssid.value} 连接成功");
+    // }
+    // else {
+    //   ViewLogUtil.error("wifi: ${ DeviceInfoController().ssid.value} 连接失败");
+    // }
   }
 
   // 查询TCP服务
@@ -291,8 +296,8 @@ class AssistantLogic extends GetxController {
   readAudioFileContent() {
     if(fileList.isEmpty) return;
     fileList_content = [];
-    var fileName = fileList[0]['fileName'];
-    var fileSize = fileList[0]['fileSize'];
+    var fileName = fileList[2]['fileName'];
+    var fileSize = fileList[2]['fileSize'];
     print("读取的文件--$fileName--$fileSize");
 
     currentFileName = fileName;

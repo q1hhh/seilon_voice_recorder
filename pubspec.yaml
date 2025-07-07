@@ -80,6 +80,8 @@ dependencies:
   opus_dart: ^3.0.1
 
   flutter_pcm_sound: ^3.1.7
+  app_settings: ^6.1.1
+
 
 dev_dependencies:
   flutter_test:

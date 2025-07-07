@@ -68,6 +68,6 @@ class TcpUtil {
     await _socket?.close();
     _socket?.destroy();
     _socket = null;
-    ViewLogUtil.info('TCP连接已手动关闭');
+    ViewLogUtil.info('TCP连接已关闭');
   }
 }
