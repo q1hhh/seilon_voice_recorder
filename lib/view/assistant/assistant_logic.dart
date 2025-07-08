@@ -86,6 +86,15 @@ class AssistantLogic extends GetxController {
 
   final int turnOffRecording = 0x0300;
 
+  Timer? timeoutTimer;
+
+  int expectedOffset = 0; // 当前期望收到的start
+
+  Completer<void>? responseCompleter;
+  // 收到的数据总长度
+  int dataCount = 0;
+
+
   @override
   void onClose() {
     disconnect();
@@ -288,16 +297,22 @@ class AssistantLogic extends GetxController {
   // 读取音频文件列表
   readAudioFileList() {
     if(fileListCount.value == 0) return;
-    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(0, fileListCount.value), 0);
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(0, 16), 0);
     _sendMessage(bleLockPackage);
   }
 
   // 读取单个音频文件内容
-  readAudioFileContent() {
+  readAudioFileContent() async {
     if(fileList.isEmpty) return;
+    // if(DeviceInfoController().messageType.value == "TCP") {
+    //   readAudioFileContentTCP();
+    //   return;
+    // }
+    TcpUtil().dataTotal = 0;
+    TcpUtil().tempData.clear();
     fileList_content = [];
-    var fileName = fileList[2]['fileName'];
-    var fileSize = fileList[2]['fileSize'];
+    var fileName = fileList[0]['fileName'];
+    var fileSize = fileList[0]['fileSize'];
     print("读取的文件--$fileName--$fileSize");
 
     currentFileName = fileName;
@@ -307,16 +322,102 @@ class AssistantLogic extends GetxController {
     int chunkSize = 900;
     int readNum = 0;
 
-    for (int offset = 0; offset < fileSize; offset += chunkSize) {
-      readNum++;
-      int len = (fileSize - offset) >= chunkSize ? chunkSize : (fileSize - offset);
-      LogUtil.log.i("读取次数===>${readNum}----读取的长度${len}");
-
-      var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(fileName, offset, len), 0);
-      _sendMessage(bleLockPackage);
-    }
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(fileName, 0, 900), 0);
+    _sendMessage(bleLockPackage);
+    // for (int offset = 0; offset < fileSize; offset += chunkSize) {
+    //   readNum++;
+    //   int len = (fileSize - offset) >= chunkSize ? chunkSize : (fileSize - offset);
+    //   LogUtil.log.i("读取次数===>${readNum}----读取的长度${len}");
+    //
+    //   var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(fileName, offset, len), 0);
+    //   _sendMessage(bleLockPackage);
+    // }
 
   }
+
+  // Future<void> readAudioFileContentTCP() async {
+  //   if (fileList.isEmpty) return;
+  //
+  //   fileList_content = [];
+  //   var fileName = fileList[0]['fileName'];
+  //   var fileSize = fileList[0]['fileSize'];
+  //   print("读取的文件--$fileName--$fileSize");
+  //
+  //   currentFileName = fileName;
+  //   currentFileSize = fileSize;
+  //
+  //   int chunkSize = 900;
+  //   int readNum = 0;
+  //
+  //   for (TcpUtil().startOffset; TcpUtil().startOffset < fileSize; TcpUtil().startOffset += chunkSize) {
+  //     readNum++;
+  //     int len = (fileSize - TcpUtil().startOffset) >= chunkSize ? chunkSize : (fileSize - TcpUtil().startOffset);
+  //     LogUtil.log.i("读取次数===>${readNum}----读取的长度${len}");
+  //
+  //     var bleLockPackage = BleControlPackage.toBleLockPackage(
+  //       ReadAudioFileContentMessage(fileName, TcpUtil().startOffset, len),
+  //       0,
+  //     );
+  //
+  //     timeoutTimer = Timer(Duration(seconds: 1), () async {
+  //       if (!(TcpUtil().responseCompleter?.isCompleted ?? true)) {
+  //         LogUtil.log.w("响应超时，重发offset=${TcpUtil().startOffset}");
+  //         await TcpUtil().sendDataAndWait(bleLockPackage);
+  //       }
+  //     });
+  //
+  //     // 这里调用 sendDataAndWait 等待响应
+  //     await TcpUtil().sendDataAndWait(bleLockPackage);
+  //   }
+  //   print("所有分包发送完成");
+  // }
+
+  Future<void> readAudioFileContentTCP() async {
+    if (fileList.isEmpty) return;
+    fileList_content = [];
+    var fileName = fileList[0]['fileName'];
+    var fileSize = fileList[0]['fileSize'];
+    print("读取的文件--$fileName--$fileSize");
+
+    currentFileName = fileName;
+    currentFileSize = fileSize;
+
+    int chunkSize = 900;
+    int readNum = 0;
+    int offset = 0;
+
+    while (offset < fileSize) {
+      expectedOffset = offset;
+      readNum++;
+      int len = (fileSize - offset) >= chunkSize ? chunkSize : (fileSize - offset);
+
+      LogUtil.log.i("当前发送位置: $offset, 当前发送次数: $readNum");
+      var bleLockPackage = BleControlPackage.toBleLockPackage(
+        ReadAudioFileContentMessage(fileName, offset, len),
+        0,
+      );
+      responseCompleter = Completer<void>();
+
+      // 发送一次
+      TcpUtil().sendDataAndWait(bleLockPackage.toBytes(MyAppCommon.DEVICE_DEFAULT_KEY));
+
+      // 启动1秒超时定时器
+      timeoutTimer = Timer(Duration(seconds: 1), () {
+        if (!(responseCompleter?.isCompleted ?? true)) {
+          LogUtil.log.w("响应超时，重发offset=$offset");
+          TcpUtil().sendDataAndWait(bleLockPackage.toBytes(MyAppCommon.DEVICE_DEFAULT_KEY));
+        }
+      });
+
+      // 等待响应
+      await responseCompleter!.future;
+      timeoutTimer?.cancel();
+
+      offset += len;
+    }
+    print("所有分包发送完成, 发送次数: $readNum");
+  }
+
 
   // 删除文件
   removeAudioFile(String? fileName) {
@@ -360,7 +461,7 @@ class AssistantLogic extends GetxController {
   }
 
   // 通用发送消息方法
-  void _sendMessage(BleControlPackage bleLockPackage) {
+  void _sendMessage(BleControlPackage bleLockPackage) async {
     var bytes = bleLockPackage.toBytes(MyAppCommon.DEVICE_DEFAULT_KEY);
 
     if(DeviceInfoController().messageType.value == "BLE") {
@@ -379,7 +480,8 @@ class AssistantLogic extends GetxController {
     }
     // TCP模式
     else {
-      TcpUtil().sendData(bytes);
+      // 发一包等响应
+      await TcpUtil().sendDataAndWait(bytes);
     }
 
   }
@@ -583,15 +685,47 @@ class AssistantLogic extends GetxController {
   }
 
   // 读取音频文件内容(回复)
-  dealAudioFileContent(BleControlMessage ble) async {
-    var audioListCountMessage = ReadAudioFileContentReplyMessage(ble);
-    LogUtil.log.i("收到的长度${audioListCountMessage.fileContent?.length}");
-    fileList_content.addAll(audioListCountMessage.fileContent as List<int>);
-    // 将内容存在本地
+  // dealAudioFileContent(BleControlMessage ble) async {
+  //   var audioListContentMessage = ReadAudioFileContentReplyMessage(ble);
+  //   LogUtil.log.i("收到的长度${audioListContentMessage.fileContent?.length} -- 位置${audioListContentMessage.start}");
+  //
+  //   // 记录TCP回复的文件内容位置
+  //   TcpUtil().tcpOffset = audioListContentMessage.start!;
+  //
+  //   // 位置相等才存入数组中
+  //   if((TcpUtil().startOffset - 900) == TcpUtil().tcpOffset) {
+  //     fileList_content.addAll(audioListContentMessage.fileContent as List<int>);
+  //   }
+  //   else {
+  //     LogUtil.log.e("收到的包start不对，丢弃！收到${TcpUtil().tcpOffset}, 期望${TcpUtil().startOffset - 900}");
+  //   }
+  //
+  //   // 将内容存在本地
+  //   if ((currentFileSize == fileList_content.length) && await requestStoragePermission()) {
+  //     await writeToFile(fileList_content as List<int>, currentFileName);
+  //   }
+  // }
+
+  // 读取音频文件内容(回复)
+  void dealAudioFileContent(BleControlMessage ble) async {
+    var audioListContentMessage = ReadAudioFileContentReplyMessage(ble);
+
+    dataCount += audioListContentMessage.fileContent!.length;
+
+    LogUtil.log.i("文件总长度$currentFileSize, "
+        "收到的长度${audioListContentMessage.fileContent?.length}, "
+        "位置${audioListContentMessage.start}, "
+        "收到的总长度: ${TcpUtil().tempData.length}}");
+
+    fileList_content.addAll(audioListContentMessage.fileContent as List<int>);
+    // responseCompleter?.complete();
+    // 如果全部接收完毕
     if ((currentFileSize == fileList_content.length) && await requestStoragePermission()) {
       await writeToFile(fileList_content as List<int>, currentFileName);
     }
   }
+
+
 
   Future<Uint8List> decodeOpusToPCM(Uint8List opusData) async {
     const int sampleRate = 16000;

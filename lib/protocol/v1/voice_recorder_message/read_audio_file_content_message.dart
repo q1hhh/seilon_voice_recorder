@@ -9,7 +9,7 @@ import '../constants/LockControlCmd.dart';
 class ReadAudioFileContentMessage extends BleControlMessage {
   ReadAudioFileContentMessage(String fileName, int start, int length) {
     cmdCategory = LockControlCmd.CATEGORY_RECORDER;
-    cmd = LockControlCmd.CMD_RECORDER_AUDIO_FILE_CONTENT;
+    cmd = LockControlCmd.CMD_RECORDER_AUDIO_FILE_CONTENT_FAST;
     data = Uint8List(46);
 
     data.setRange(0, 40, ByteUtil.toFixedLengthBytes(fileName));

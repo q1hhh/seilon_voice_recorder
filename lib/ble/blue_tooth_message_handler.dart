@@ -55,7 +55,7 @@ class BlueToothMessageHandler {
   // }
 
   void handleMessage(Uint8List bleMsg, String deviceUuid) async {
-    LogUtil.log.i("收到数据===>${bleMsg}");
+    // LogUtil.log.i("handleMessage收到数据长度===>${bleMsg.length}");
 
     if (bleMsg[0] == BleControlPackage.START[0] && bleMsg[1] == BleControlPackage.START[1]) {
 
@@ -172,7 +172,16 @@ class BlueToothMessageHandler {
             }
             break;
 
-          case LockControlCmd.CMD_RECORDER_AUDIO_FILE_CONTENT:
+            // 单个文件读取
+          // case LockControlCmd.CMD_RECORDER_AUDIO_FILE_CONTENT:
+          //   if (Get.isRegistered<AssistantLogic>()) {
+          //     var find = Get.find<AssistantLogic>();
+          //     find.dealAudioFileContent(ble);
+          //   }
+          //   break;
+
+            //设备快速上传
+          case LockControlCmd.CMD_RECORDER_AUDIO_FILE_REMOVE_ALL_FAST_UPLOAD:
             if (Get.isRegistered<AssistantLogic>()) {
               var find = Get.find<AssistantLogic>();
               find.dealAudioFileContent(ble);
