@@ -653,7 +653,6 @@ class AssistantLogic extends GetxController {
 
   dealOpenWifiMessage(BleControlMessage ble) {
     var wifiOpenMessage = WifiOpenMessage(ble);
-    // LogUtil.log.i(wifiOpenMessage);
     DeviceInfoController().ssid.value = wifiOpenMessage.apName ?? "";
     DeviceInfoController().password.value = wifiOpenMessage.apPassword ?? "";
     ViewLogUtil.info("wifi名称： ${DeviceInfoController().ssid}, wifi密码: ${ DeviceInfoController().password}");
@@ -662,7 +661,6 @@ class AssistantLogic extends GetxController {
   // 查询TCP服务信息(回复)
   dealTcpServer(BleControlMessage ble) {
     var tcpMessage = TcpServerParseMessage(ble);
-    // LogUtil.log.i(tcpMessage);
     DeviceInfoController().tcpIp.value = tcpMessage.tcpIp?.join(".") ?? "";
     DeviceInfoController().tcpPort.value = tcpMessage.tcpPort ?? 0;
     ViewLogUtil.info("tcpIp = ${DeviceInfoController().tcpIp}, tcpPort = ${DeviceInfoController().tcpPort}");
@@ -671,7 +669,6 @@ class AssistantLogic extends GetxController {
   // 读取音频文件列表数量(回复)
   dealAudioListCount(BleControlMessage ble) {
     var audioListCountMessage = ReadAudioListCountReplyMessage(ble);
-    // LogUtil.log.i(audioListCountMessage);
     ViewLogUtil.info("文件数量--->${audioListCountMessage}");
     fileListCount.value = audioListCountMessage.fileCount ?? 0;
   }
@@ -679,7 +676,6 @@ class AssistantLogic extends GetxController {
   // 读取音频文件列表(回复)
   dealAudioList(BleControlMessage ble) {
     var audioListMessage = ReadAudioFileListReplyMessage(ble);
-    // LogUtil.log.i(audioListMessage.fileList?.length);
     fileList.value = audioListMessage.fileList ?? [];
     ViewLogUtil.info(audioListMessage.toString());
   }
