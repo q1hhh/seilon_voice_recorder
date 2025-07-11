@@ -8,7 +8,7 @@ import '../../../util/crc_16_util.dart';
 
 class ReadAudioFileContentReplyMessage extends BleControlMessage {
   int? start; // 当前内容的起始位置
-  List? fileContent; // 文件内容
+  List<int>? fileContent; // 文件内容
   List<int>? fileContentCrc; // 文件内容crc16
 
   ReadAudioFileContentReplyMessage(BleControlMessage ble) {

@@ -54,61 +54,144 @@ class BlueToothMessageHandler {
   //   }
   // }
 
+  // void handleMessage(Uint8List bleMsg, String deviceUuid) async {
+  //   // LogUtil.log.i("handleMessage收到数据长度===>${bleMsg.length}");
+  //
+  //   if (bleMsg[0] == BleControlPackage.START[0] && bleMsg[1] == BleControlPackage.START[1]) {
+  //
+  //     queueDataMap.remove(deviceUuid);
+  //     Queue<Uint8List> queue = Queue<Uint8List>();
+  //     queue.add(bleMsg);
+  //     queueDataMap.putIfAbsent(deviceUuid, () => queue);
+  //
+  //     if (bleMsg[bleMsg.length -1] == 0xFE) {
+  //       Uint8List data = Uint8List(0);
+  //       while(queue.isNotEmpty) {
+  //         Uint8List element = queue.removeFirst();
+  //         print("Removed element: $element");
+  //         data = Uint8List.fromList([...data, ...element]);
+  //       }
+  //       queueDataMap.remove(deviceUuid);
+  //       log.i('数据:$data');
+  //       _distributeData(data, deviceUuid);
+  //     }
+  //   }
+  //   else {
+  //     if(queueDataMap[deviceUuid] == null) {
+  //       queueDataMap[deviceUuid] = Queue<Uint8List>();
+  //     }
+  //     queueDataMap[deviceUuid]!.add(bleMsg);
+  //
+  //     var handleMsg = queueDataMap[deviceUuid]!.first;
+  //
+  //     int length = ByteUtil.getInt2(handleMsg, 5);
+  //
+  //     // queueDataMap[deviceUuid]!.add(bleMsg);
+  //
+  //     if(queueDataMap[deviceUuid]!.length == length) {
+  //       var allData = queueDataMap.remove(deviceUuid);
+  //
+  //       Uint8List data = Uint8List(0);
+  //       while (allData!.isNotEmpty) {
+  //         data.addAll(allData.removeFirst());
+  //       }
+  //
+  //       _distributeData(data, deviceUuid);
+  //     }
+  //     else {
+  //       if (bleMsg[bleMsg.length -1] == 0xFE) {
+  //         var queue = queueDataMap.remove(deviceUuid);
+  //         Uint8List data = Uint8List(0);
+  //         while(queue!.isNotEmpty) {
+  //           Uint8List element = queue.removeFirst();
+  //           print("Removed element: $element");
+  //           data = Uint8List.fromList([...data, ...element]);
+  //         }
+  //         queueDataMap.remove(deviceUuid);
+  //         log.i('数据2:$data');
+  //         _distributeData(data, deviceUuid);
+  //       }
+  //     }
+  //   }
+  // }
+
   void handleMessage(Uint8List bleMsg, String deviceUuid) async {
-    // LogUtil.log.i("handleMessage收到数据长度===>${bleMsg.length}");
+    // 1. 初始化队列
+    queueDataMap.putIfAbsent(deviceUuid, () => Queue<Uint8List>());
+    queueDataMap[deviceUuid]!.add(bleMsg);
 
-    if (bleMsg[0] == BleControlPackage.START[0] && bleMsg[1] == BleControlPackage.START[1]) {
+    Queue<Uint8List> queue = queueDataMap[deviceUuid]!;
 
-      queueDataMap.remove(deviceUuid);
-      Queue<Uint8List> queue = Queue<Uint8List>();
-      queue.add(bleMsg);
-      queueDataMap.putIfAbsent(deviceUuid, () => queue);
-
-      if (bleMsg[bleMsg.length -1] == 0xFE) {
-        Uint8List data = Uint8List(0);
-        while(queue.isNotEmpty) {
-          Uint8List element = queue.removeFirst();
-          print("Removed element: $element");
-          data = Uint8List.fromList([...data, ...element]);
+    // 尝试不断从队列中组包，直到无法再组出完整包
+    while (queue.isNotEmpty) {
+      // 找到第一个包头
+      Uint8List? handleMsg;
+      int startIndex = 0;
+      for (var msg in queue) {
+        if (msg.length >= 2 && msg[0] == BleControlPackage.START[0] && msg[1] == BleControlPackage.START[1]) {
+          handleMsg = msg;
+          break;
         }
-        queueDataMap.remove(deviceUuid);
-        log.i('数据:$data');
-        _distributeData(data, deviceUuid);
+        startIndex++;
       }
-    }
-    else {
-      var handleMsg = queueDataMap[deviceUuid]!.first;
+      if (handleMsg == null) {
+        // 没有包头，丢弃前面无效数据
+        queue.clear();
+        break;
+      }
 
+      // 判断当前包够不够取包长字段
+      if (handleMsg.length < 7) break; // 至少到包长字段
+
+      // 获取包长度（含包头+包尾）
       int length = ByteUtil.getInt2(handleMsg, 5);
 
-      queueDataMap[deviceUuid]!.add(bleMsg);
-
-      if(queueDataMap[deviceUuid]!.length == length) {
-        var allData = queueDataMap.remove(deviceUuid);
-
-        Uint8List data = Uint8List(0);
-        while (allData!.isNotEmpty) {
-          data.addAll(allData.removeFirst());
-        }
-
-        _distributeData(data, deviceUuid);
-      }
-      else {
-        if (bleMsg[bleMsg.length -1] == 0xFE) {
-          var queue = queueDataMap.remove(deviceUuid);
-          Uint8List data = Uint8List(0);
-          while(queue!.isNotEmpty) {
-            Uint8List element = queue.removeFirst();
-            print("Removed element: $element");
-            data = Uint8List.fromList([...data, ...element]);
-          }
-          queueDataMap.remove(deviceUuid);
-          log.i('数据2:$data');
-          _distributeData(data, deviceUuid);
+      // 计算当前队列内累计长度
+      int totalLen = 0;
+      int endIndex = -1;
+      for (int i = startIndex; i < queue.length; i++) {
+        totalLen += queue.elementAt(i).length;
+        if (totalLen >= length) {
+          endIndex = i;
+          break;
         }
       }
+
+      if (endIndex == -1) break; // 不够长，等下一包
+
+      // 组装完整数据包
+      List<int> fullPacket = [];
+      int remainLen = length;
+      for (int i = startIndex; i <= endIndex; i++) {
+        Uint8List item = queue.elementAt(startIndex); // always use startIndex as elements shift left after removeFirst
+        if (item.length <= remainLen) {
+          fullPacket.addAll(item);
+          remainLen -= item.length;
+          queue.removeFirst();
+        } else {
+          // 如果某个包拆开了，只取所需长度
+          fullPacket.addAll(item.sublist(0, remainLen));
+          // 剩下的部分塞回队首
+          queue.removeFirst();
+          queue.addFirst(item.sublist(remainLen));
+          remainLen = 0;
+        }
+        if (remainLen == 0) break;
+      }
+
+      // 校验包尾
+      if (fullPacket.length >= 1 && fullPacket.last == 0xFE) {
+        _distributeData(Uint8List.fromList(fullPacket), deviceUuid);
+      } else {
+        // 包不对，数据错误，丢弃本次包
+        //（如果你要更严谨处理，可打印日志但不要崩溃）
+        log.e("包尾不是0xFE，数据异常");
+        continue;
+      }
+      // 队列前面已处理完的数据已remove
     }
   }
+
 
   void _distributeData(Uint8List data, String deviceUuid) {
     var parse = BleControlPackage.parse(data);

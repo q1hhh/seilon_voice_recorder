@@ -126,6 +126,12 @@ class AssistantPage extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Column(
                         children: [
+                          Text("读取的文件: ${assistantLogic.currentFileName.value}"),
+                          SizedBox(
+                            child: Text(
+                              "读取文件的大小：(${assistantLogic.fileListContent.length}/${assistantLogic.currentFileSize.value})", style: TextStyle(color: Colors.deepPurpleAccent),
+                            ),
+                          ),
                           _buildActionButtons(),
                         ],
                       ),

@@ -64,14 +64,23 @@ class AssistantLogic extends GetxController {
   var homeLogic = Get.find<HomeControl>();
 
   // 读取内容的文件名
-  var currentFileName;
+  RxString currentFileName = "".obs;
   // 读取内容的文件大小
-  var currentFileSize;
+  RxInt currentFileSize = 0.obs;
   
   // 暂存读取文件的内容
-  List<int> fileList_content = [];
+  RxList fileListContent = [].obs;
 
-  // 读取文件列表的数量
+  // 文件列表总共多少页
+  RxInt filePageCount = 0.obs;
+
+  // 当前读取文件列表的位置(页码)
+  RxInt filePageNum = 0.obs;
+
+  // 每页最多读16
+  RxInt filePageSize = 16.obs;
+
+  // 读取到的文件的总数量
   RxInt fileListCount = 0.obs;
 
   //读取到的文件列表
@@ -297,8 +306,15 @@ class AssistantLogic extends GetxController {
   // 读取音频文件列表
   readAudioFileList() {
     if(fileListCount.value == 0) return;
-    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(0, 16), 0);
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(filePageNum.value, filePageSize.value), 0);
     _sendMessage(bleLockPackage);
+
+    if(filePageNum.value < filePageCount.value) {
+      filePageNum.value++;
+    }
+    else {
+      filePageNum.value = 0;
+    }
   }
 
   // 读取单个音频文件内容
@@ -310,13 +326,14 @@ class AssistantLogic extends GetxController {
     // }
     TcpUtil().dataTotal = 0;
     TcpUtil().tempData.clear();
-    fileList_content = [];
-    var fileName = fileList[0]['fileName'];
-    var fileSize = fileList[0]['fileSize'];
+    fileListContent.clear();
+    fileListContent.refresh();
+    var fileName = fileList[1]['fileName'];
+    var fileSize = fileList[1]['fileSize'];
     print("读取的文件--$fileName--$fileSize");
 
-    currentFileName = fileName;
-    currentFileSize = fileSize;
+    currentFileName.value = fileName;
+    currentFileSize.value = fileSize;
 
     // 每次读取900字节
     int chunkSize = 900;
@@ -338,7 +355,7 @@ class AssistantLogic extends GetxController {
   // Future<void> readAudioFileContentTCP() async {
   //   if (fileList.isEmpty) return;
   //
-  //   fileList_content = [];
+  //   fileListContent = [];
   //   var fileName = fileList[0]['fileName'];
   //   var fileSize = fileList[0]['fileSize'];
   //   print("读取的文件--$fileName--$fileSize");
@@ -374,13 +391,15 @@ class AssistantLogic extends GetxController {
 
   Future<void> readAudioFileContentTCP() async {
     if (fileList.isEmpty) return;
-    fileList_content = [];
+    fileListContent.clear();
+    fileListContent.refresh();
+
     var fileName = fileList[0]['fileName'];
     var fileSize = fileList[0]['fileSize'];
     print("读取的文件--$fileName--$fileSize");
 
-    currentFileName = fileName;
-    currentFileSize = fileSize;
+    currentFileName.value = fileName;
+    currentFileSize.value = fileSize;
 
     int chunkSize = 900;
     int readNum = 0;
@@ -608,7 +627,6 @@ class AssistantLogic extends GetxController {
       await file.writeAsBytes(Uint8List.fromList(data));
 
       print('文件已写入至: ${file.path}');
-      fileList_content = [];
     } catch (e) {
       print('写入失败: $e');
     }
@@ -669,8 +687,13 @@ class AssistantLogic extends GetxController {
   // 读取音频文件列表数量(回复)
   dealAudioListCount(BleControlMessage ble) {
     var audioListCountMessage = ReadAudioListCountReplyMessage(ble);
-    ViewLogUtil.info("文件数量--->${audioListCountMessage}");
+    // 先计算总共多少页(每页最多16个)
     fileListCount.value = audioListCountMessage.fileCount ?? 0;
+    filePageCount.value = (fileListCount.value / filePageSize.value).ceil();
+
+    ViewLogUtil.info("文件数量--->${audioListCountMessage}");
+    ViewLogUtil.info("文件页数--->${filePageCount.value}");
+
   }
 
   // 读取音频文件列表(回复)
@@ -678,6 +701,7 @@ class AssistantLogic extends GetxController {
     var audioListMessage = ReadAudioFileListReplyMessage(ble);
     fileList.value = audioListMessage.fileList ?? [];
     ViewLogUtil.info(audioListMessage.toString());
+    ViewLogUtil.info("当前位置: (${filePageNum.value}/${filePageCount.value})");
   }
 
   // 读取音频文件内容(回复)
@@ -690,15 +714,15 @@ class AssistantLogic extends GetxController {
   //
   //   // 位置相等才存入数组中
   //   if((TcpUtil().startOffset - 900) == TcpUtil().tcpOffset) {
-  //     fileList_content.addAll(audioListContentMessage.fileContent as List<int>);
+  //     fileListContent.addAll(audioListContentMessage.fileContent as List<int>);
   //   }
   //   else {
   //     LogUtil.log.e("收到的包start不对，丢弃！收到${TcpUtil().tcpOffset}, 期望${TcpUtil().startOffset - 900}");
   //   }
   //
   //   // 将内容存在本地
-  //   if ((currentFileSize == fileList_content.length) && await requestStoragePermission()) {
-  //     await writeToFile(fileList_content as List<int>, currentFileName);
+  //   if ((currentFileSize == fileListContent.length) && await requestStoragePermission()) {
+  //     await writeToFile(fileListContent as List<int>, currentFileName);
   //   }
   // }
 
@@ -706,18 +730,30 @@ class AssistantLogic extends GetxController {
   void dealAudioFileContent(BleControlMessage ble) async {
     var audioListContentMessage = ReadAudioFileContentReplyMessage(ble);
 
-    dataCount += audioListContentMessage.fileContent!.length;
+    if(DeviceInfoController().messageType.value == "TCP") {
+      if (audioListContentMessage.fileContent == null) {
+        ViewLogUtil.error("文件内容为空, ble data===> $ble");
+        return;
+      }
 
-    LogUtil.log.i("文件总长度$currentFileSize, "
-        "收到的长度${audioListContentMessage.fileContent?.length}, "
-        "位置${audioListContentMessage.start}, "
-        "收到的总长度: ${TcpUtil().tempData.length}}");
+      dataCount += audioListContentMessage.fileContent!.length;
 
-    fileList_content.addAll(audioListContentMessage.fileContent as List<int>);
+      LogUtil.log.i(
+          "收到文件内容的长度${audioListContentMessage.fileContent?.length}, "
+          "文件内容的起始位置${audioListContentMessage.start}, "
+          "收到数据的总长度: ${TcpUtil().tempData.length},"
+            "文件内容总长度:$dataCount"
+      );
+    }
+
+    fileListContent.value.addAll(audioListContentMessage.fileContent as List<int>);
+    fileListContent.refresh();
+    LogUtil.log.i("收到的数据长度： ${fileListContent.length}");
     // responseCompleter?.complete();
     // 如果全部接收完毕
-    if ((currentFileSize == fileList_content.length) && await requestStoragePermission()) {
-      await writeToFile(fileList_content as List<int>, currentFileName);
+    if ((currentFileSize.value == fileListContent.length) && await requestStoragePermission()) {
+      // await writeToFile(fileListContent.value.cast<int>(), currentFileName.value);
+      await writeToExternalStorage(Uint8List.fromList(fileListContent.value.cast<int>()), currentFileName.value);
     }
   }
 
