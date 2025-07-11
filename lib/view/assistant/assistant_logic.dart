@@ -38,7 +38,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../controllers/deviceInfo_control.dart';
 import '../../protocol/v1/constants/LockControlCmd.dart';
-import '../../protocol/v1/voice_recorder_message/ota_message.dart';
+import '../../protocol/v1/voice_recorder_message/start_ota_message.dart';
 import '../../protocol/v1/voice_recorder_message/readAudioFileListMessage.dart';
 import '../../protocol/v1/voice_recorder_message/read_audio_file_content_message.dart';
 import '../../protocol/v1/voice_recorder_message/read_audio_file_content_reply_message.dart';
@@ -57,6 +57,7 @@ import '../../protocol/v1/network_category_message/hand_shake_message.dart';
 import '../../protocol/v1/voice_recorder_message/control_sound_record_message.dart';
 import '../../protocol/v1/voice_recorder_message/get_device_info_message.dart';
 import '../../theme/app_colors.dart';
+import '../../util/crc_16_util.dart';
 import '../../util/tcp_util.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter/services.dart';
@@ -136,7 +137,8 @@ class AssistantLogic extends GetxController {
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
       { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
-      { "text": "OTA升级", "press": () => startOTA() },
+      { "text": "进入OTA升级模式", "press": () => startOTA() },
+      { "text": "开始OTA升级", "press": () => sendOTAData() },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
     ]);
@@ -448,28 +450,39 @@ class AssistantLogic extends GetxController {
     _sendMessage(bleLockPackage);
   }
 
-  // OTA升级
+  // 开始OTA升级
   startOTA() async {
     ByteData data = await rootBundle.load('assets/ota_all_4.4.0.05.bin');
     LogUtil.log.i("OTA升级文件大小-->${data.buffer.asUint8List().length}");
-    int otaLength = data.buffer.asUint8List().length;
+    Uint8List otaBytes = data.buffer.asUint8List();
 
-    // 减去固定的
-    int maxLength = 512 - 32;
+    Uint8List checkSum = Crc16Util.calculateBigEndian(otaBytes);
 
-    for(var i = 0; i < otaLength; i += maxLength) {
-      int end = (i + maxLength < otaLength) ? (i + maxLength) : otaLength;
+    var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(2, otaBytes.length, checkSum, ""), 0);
 
-      // 每包发送的数据
-      Uint8List otaData = data.buffer.asUint8List().sublist(i, end);
+    _sendMessage(bleLockPackage);
+  }
 
-      var bleLockPackage = OtaMessage(otaData);
+  // OTA升级
+  sendOTAData() async {
 
-      // _sendMessage(bleLockPackage);
-
-      LogUtil.log.i("分包：offset=$i, end=$end, 长度=${otaData.length}");
-      await Future.delayed(Duration(milliseconds: 20));
-    }
+    //
+    // // 减去固定的
+    // int maxLength = 1460 - 32;
+    //
+    // for(var i = 0; i < otaLength; i += maxLength) {
+    //   int end = (i + maxLength < otaLength) ? (i + maxLength) : otaLength;
+    //
+    //   // 每包发送的数据
+    //   Uint8List otaData = data.buffer.asUint8List().sublist(i, end);
+    //
+    //   // var bleLockPackage = UpgradePacketMessage(otaData);
+    //
+    //   // _sendMessage(bleLockPackage);
+    //
+    //   LogUtil.log.i("分包：offset=$i, end=$end, 长度=${otaData.length}");
+    //   await Future.delayed(Duration(milliseconds: 20));
+    // }
   }
 
   // 清空本地的所有的opus文件
