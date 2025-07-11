@@ -104,6 +104,7 @@ flutter_launcher_icons:
 flutter:
   assets:
     - images/
+    - bin/
   #    - images/Image.svg
   #    - images/Image.png
 

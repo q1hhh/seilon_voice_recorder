@@ -38,6 +38,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../controllers/deviceInfo_control.dart';
 import '../../protocol/v1/constants/LockControlCmd.dart';
+import '../../protocol/v1/voice_recorder_message/ota_message.dart';
 import '../../protocol/v1/voice_recorder_message/readAudioFileListMessage.dart';
 import '../../protocol/v1/voice_recorder_message/read_audio_file_content_message.dart';
 import '../../protocol/v1/voice_recorder_message/read_audio_file_content_reply_message.dart';
@@ -135,6 +136,7 @@ class AssistantLogic extends GetxController {
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
       { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
+      { "text": "OTA升级", "press": () => startOTA() },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
     ]);
@@ -444,6 +446,30 @@ class AssistantLogic extends GetxController {
     LogUtil.log.i("删除的文件名--->$fileName");
     var bleLockPackage = BleControlPackage.toBleLockPackage(RemoveAudioFile(fileName), 0);
     _sendMessage(bleLockPackage);
+  }
+
+  // OTA升级
+  startOTA() async {
+    ByteData data = await rootBundle.load('assets/ota_all_4.4.0.05.bin');
+    LogUtil.log.i("OTA升级文件大小-->${data.buffer.asUint8List().length}");
+    int otaLength = data.buffer.asUint8List().length;
+
+    // 减去固定的
+    int maxLength = 512 - 32;
+
+    for(var i = 0; i < otaLength; i += maxLength) {
+      int end = (i + maxLength < otaLength) ? (i + maxLength) : otaLength;
+
+      // 每包发送的数据
+      Uint8List otaData = data.buffer.asUint8List().sublist(i, end);
+
+      var bleLockPackage = OtaMessage(otaData);
+
+      // _sendMessage(bleLockPackage);
+
+      LogUtil.log.i("分包：offset=$i, end=$end, 长度=${otaData.length}");
+      await Future.delayed(Duration(milliseconds: 20));
+    }
   }
 
   // 清空本地的所有的opus文件
