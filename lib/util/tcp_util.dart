@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:Recording_pen/util/ByteUtil.dart';
 import 'package:Recording_pen/util/log_util.dart';
 import 'package:Recording_pen/util/view_log_util.dart';
 import 'package:get_storage/get_storage.dart';
@@ -48,6 +50,7 @@ class TcpUtil {
   // 直接发送，不等
   void sendData(List<int> data) {
     if (_socket != null) {
+      ViewLogUtil.info('TCP发送--->${ByteUtil.uint8ListToHexFull(Uint8List.fromList(data))}');
       _socket!.add(data);
     } else {
       print("TCP未连接，无法发送数据");
@@ -77,7 +80,7 @@ class TcpUtil {
         tempData.addAll(data);
         LogUtil.log.i("收到的总长度==>${tempData.length}");
 
-        ViewLogUtil.info('收到TCP服务器响应--->$data');
+        ViewLogUtil.info('收到TCP服务器响应--->${ByteUtil.uint8ListToHexFull(Uint8List.fromList(data))}');
         var deviceInfo = GetStorage().read("deviceInfo");
         BlueToothMessageHandler().handleMessage(data, deviceInfo["deviceId"]);
 

@@ -13,7 +13,7 @@ class UpgradePacketMessage extends BleControlMessage {
 
     temp[0] = type & 0xff;
     temp.setRange(1, 3, ByteUtil.getUint8ListOfInt2(index));
-    temp.setRange(3,  3 + data.length, data);
+    temp.setRange(3, 3 + data.length, data);
 
     var calculate = Crc16Util.calculateBigEndian(data);
 

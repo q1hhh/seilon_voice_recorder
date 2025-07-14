@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
@@ -14,6 +15,8 @@ import 'package:Recording_pen/protocol/v1/voice_recorder_message/open_wifi_messa
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/read_audio_list_count_reply_message.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/remove_audio_file.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/screen_control_message.dart';
+import 'package:Recording_pen/protocol/v1/voice_recorder_message/start_ota_reply_message.dart';
+import 'package:Recording_pen/protocol/v1/voice_recorder_message/upgrade_package_reply_message.dart';
 import 'package:Recording_pen/util/ByteUtil.dart';
 import 'package:Recording_pen/util/log_util.dart';
 import 'package:Recording_pen/util/my_pcm_util.dart';
@@ -38,6 +41,7 @@ import 'package:uuid/uuid.dart';
 
 import '../../controllers/deviceInfo_control.dart';
 import '../../protocol/v1/constants/LockControlCmd.dart';
+import '../../protocol/v1/system_setting_message/upgrade_packet_message.dart';
 import '../../protocol/v1/voice_recorder_message/start_ota_message.dart';
 import '../../protocol/v1/voice_recorder_message/readAudioFileListMessage.dart';
 import '../../protocol/v1/voice_recorder_message/read_audio_file_content_message.dart';
@@ -105,6 +109,19 @@ class AssistantLogic extends GetxController {
   // 收到的数据总长度
   int dataCount = 0;
 
+  // ==============================
+
+  late Uint8List allOTAData;
+  // 当前发送的OTA数据包
+  late Uint8List currentSplitData;
+  // OTA数据包的长度
+  late int maxDataLength = 0;
+  // OTA数据包(用于分包发送)
+  Queue<Uint8List> splitData = Queue();
+  // 当前发送包的标识(1~N)
+  int currentPackAgeIndex = 1;
+  // OTA升级模式
+  int otaType = 2;
 
   @override
   void onClose() {
@@ -138,7 +155,7 @@ class AssistantLogic extends GetxController {
       { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
       { "text": "进入OTA升级模式", "press": () => startOTA() },
-      { "text": "开始OTA升级", "press": () => sendOTAData() },
+      { "text": "开始OTA升级", "press": () => sendUpgradePacket() },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
     ]);
@@ -450,39 +467,30 @@ class AssistantLogic extends GetxController {
     _sendMessage(bleLockPackage);
   }
 
-  // 开始OTA升级
+  // 进入OTA升级模式
   startOTA() async {
-    ByteData data = await rootBundle.load('assets/ota_all_4.4.0.05.bin');
-    LogUtil.log.i("OTA升级文件大小-->${data.buffer.asUint8List().length}");
-    Uint8List otaBytes = data.buffer.asUint8List();
+    ByteData data = await rootBundle.load('bin/ota_all_4.4.0.06.bin');
+    allOTAData = data.buffer.asUint8List();
 
-    Uint8List checkSum = Crc16Util.calculateBigEndian(otaBytes);
+    Uint8List checkSum = Crc16Util.calculateBigEndian(allOTAData);
+    String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
 
-    var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(2, otaBytes.length, checkSum, ""), 0);
+    LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
+    LogUtil.log.i("crc==>$crc16CheckSum");
+    LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
+
+    var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(2, allOTAData.length, crc16CheckSum, "4.4.0.06"), 0);
 
     _sendMessage(bleLockPackage);
   }
 
-  // OTA升级
-  sendOTAData() async {
+  // 发送OTA升级数据
+  sendUpgradePacket() async {
+    var bleLockPackage = BleControlPackage.toBleLockPackage(
+        UpgradePacketMessage(otaType, currentPackAgeIndex, splitData.first), 0);
+    _sendMessage(bleLockPackage);
 
-    //
-    // // 减去固定的
-    // int maxLength = 1460 - 32;
-    //
-    // for(var i = 0; i < otaLength; i += maxLength) {
-    //   int end = (i + maxLength < otaLength) ? (i + maxLength) : otaLength;
-    //
-    //   // 每包发送的数据
-    //   Uint8List otaData = data.buffer.asUint8List().sublist(i, end);
-    //
-    //   // var bleLockPackage = UpgradePacketMessage(otaData);
-    //
-    //   // _sendMessage(bleLockPackage);
-    //
-    //   LogUtil.log.i("分包：offset=$i, end=$end, 长度=${otaData.length}");
-    //   await Future.delayed(Duration(milliseconds: 20));
-    // }
+    LogUtil.log.i("分包：index=$currentPackAgeIndex, 当前长度=${splitData.first.length}");
   }
 
   // 清空本地的所有的opus文件
@@ -538,8 +546,7 @@ class AssistantLogic extends GetxController {
     }
     // TCP模式
     else {
-      // 发一包等响应
-      await TcpUtil().sendDataAndWait(bytes);
+      TcpUtil().sendData(bytes);
     }
 
   }
@@ -796,7 +803,91 @@ class AssistantLogic extends GetxController {
     }
   }
 
+  // 进入OTA升级模式(回复)
+  dealStartOTAReply(BleControlMessage ble) {
+    var startOTAReply = StartOtaReplyMessage(ble);
+    LogUtil.log.i(startOTAReply);
 
+    var code = startOTAReply.data[0];
+    // 电量不足
+    if (code == 0x1B) {
+      ViewLogUtil.error("电量不足");
+      return;
+    }
+
+    if(code == 0x01) {
+      ViewLogUtil.error("进入升级模式失败");
+      return;
+    }
+
+    if(code == 0x03) {
+      ViewLogUtil.error("同一版本");
+      return;
+    }
+
+    int maxLength = startOTAReply.getMaxLength();
+    log.i(maxLength);
+    //分包数据清除
+    splitData.clear();
+
+    // 开始分包
+    splitData = splitPacketForByte(allOTAData, maxLength);
+
+    //最大包数
+    maxDataLength = splitData.length;
+  }
+
+  Queue<Uint8List> splitPacketForByte(Uint8List data, int size) {
+    Queue<Uint8List> dataQueue = Queue<Uint8List>();
+    if (data != null) {
+      int index = 0;
+      do {
+        Uint8List surplusData = Uint8List.sublistView(data, index);
+        Uint8List currentData;
+        if (surplusData.length <= size) {
+          currentData = Uint8List.fromList(surplusData);
+          index += surplusData.length;
+        } else {
+          currentData = Uint8List.sublistView(data, index, index + size);
+          index += size;
+        }
+        dataQueue.add(currentData);
+      } while (index < data.length);
+    }
+    return dataQueue;
+  }
+
+  // 发送OTA升级数据(回复)
+  dealSendDataOTAReply(BleControlMessage ble) async {
+    var sendOTADataReplyMessage = UpgradePackageReplyMessage(ble);
+    LogUtil.log.i("发送升级数据包的回复${sendOTADataReplyMessage}");
+
+    // 发送升级包成功
+    if (sendOTADataReplyMessage.isSuccess()) {
+      currentPackAgeIndex = ++currentPackAgeIndex;
+    }
+
+    if (sendOTADataReplyMessage.isFail()) {
+      ViewLogUtil.error("升级发生错误");
+      return;
+    }
+
+    // OTA升级成功
+    if (sendOTADataReplyMessage.isComplete()) {
+      ViewLogUtil.info("OTA升级成功");
+      return;
+    }
+
+
+    if (currentPackAgeIndex <= maxDataLength) {
+      splitData.removeFirst();
+      await Future.delayed(const Duration(milliseconds: 20));
+      sendUpgradePacket();
+    } else {
+      log.i('send Success');
+    }
+
+  }
 
   Future<Uint8List> decodeOpusToPCM(Uint8List opusData) async {
     const int sampleRate = 16000;

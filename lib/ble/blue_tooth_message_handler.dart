@@ -209,7 +209,26 @@ class BlueToothMessageHandler {
    * 完整的数据解析后的处理方法
    */
   _receiveMessage(BleControlMessage ble, String deviceUuid) {
+    // print("是什么===${ble.cmdCategory}");
     switch(ble.cmdCategory) {
+      case LockControlCmd.CATEGORY_SYSTEM:
+        switch(ble.cmd) {
+          case LockControlCmd.CMD_SPECIAL_REQUEST_UPGRADE:
+            if (Get.isRegistered<AssistantLogic>()) {
+              var find = Get.find<AssistantLogic>();
+              find.dealStartOTAReply(ble);
+            }
+            break;
+
+          case LockControlCmd.CMD_SPECIAL_SEND_UPGRADE_DATA:
+            if (Get.isRegistered<AssistantLogic>()) {
+              var find = Get.find<AssistantLogic>();
+              find.dealSendDataOTAReply(ble);
+            }
+            break;
+        }
+        break;
+
       case LockControlCmd.CATEGORY_RECORDER:
         switch(ble.cmd) {
           case LockControlCmd.CMD_RECORDER_REAL_TIME_STREAMING:
