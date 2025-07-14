@@ -501,7 +501,7 @@ class AssistantLogic extends GetxController {
     ByteData data = await rootBundle.load('bin/CPS8602_MTP_00_5C_V1.3_CRC0F1B.bin');
     allOTAData = data.buffer.asUint8List();
 
-    Uint8List checkSum = Crc16Util.calculateBigEndian(allOTAData);
+    Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
     String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
 
     LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
