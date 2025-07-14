@@ -65,6 +65,7 @@ import '../../util/crc_16_util.dart';
 import '../../util/tcp_util.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter/services.dart';
+import 'package:file_picker/file_picker.dart';
 
 class AssistantLogic extends GetxController {
   var homeLogic = Get.find<HomeControl>();
@@ -154,7 +155,9 @@ class AssistantLogic extends GetxController {
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
       { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
-      { "text": "进入OTA升级模式", "press": () => startOTA() },
+      { "text": "进入OTA升级模式(wifi: 06)", "press": () => startOTA() },
+      { "text": "进入OTA升级模式(BLE1: CPS8602)", "press": () => startOTAForBle() },
+      { "text": "进入OTA升级模式(BLE2: 05)", "press": () => startOTAForBle2() },
       { "text": "开始OTA升级", "press": () => sendUpgradePacket() },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
@@ -185,7 +188,7 @@ class AssistantLogic extends GetxController {
 
     if (deviceMatches.isNotEmpty) {
       var targetDevice = deviceMatches.first;
-      BleService().writeData(targetDevice, bytes);
+      BleService().writeData(targetDevice, bytes, targetDevice.mtuNow);
     } else {
       LogUtil.log.e("设备未连接或找不到设备: ${deviceInfo["deviceId"]}");
     }
@@ -207,7 +210,7 @@ class AssistantLogic extends GetxController {
 
     if (deviceMatches.isNotEmpty) {
       var targetDevice = deviceMatches.first;
-      BleService().writeData(targetDevice, bytes);
+      BleService().writeData(targetDevice, bytes, targetDevice.mtuNow);
     } else {
       LogUtil.log.e("设备未连接或找不到设备: ${deviceInfo["deviceId"]}");
     }
@@ -493,6 +496,40 @@ class AssistantLogic extends GetxController {
     LogUtil.log.i("分包：index=$currentPackAgeIndex, 当前长度=${splitData.first.length}");
   }
 
+  // 进入蓝牙OTA升级(第一个)
+  startOTAForBle() async {
+    ByteData data = await rootBundle.load('bin/CPS8602_MTP_00_5C_V1.3_CRC0F1B.bin');
+    allOTAData = data.buffer.asUint8List();
+
+    Uint8List checkSum = Crc16Util.calculateBigEndian(allOTAData);
+    String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
+
+    LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
+    LogUtil.log.i("crc==>$crc16CheckSum");
+    LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
+
+    var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(0, allOTAData.length, crc16CheckSum, "4.4.0.06"), 0);
+
+    _sendMessage(bleLockPackage);
+  }
+
+  // 进入蓝牙OTA升级(第二个)
+  startOTAForBle2() async {
+    ByteData data = await rootBundle.load('ota_all_4.4.0.05.bin');
+    allOTAData = data.buffer.asUint8List();
+
+    Uint8List checkSum = Crc16Util.calculateBigEndian(allOTAData);
+    String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
+
+    LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
+    LogUtil.log.i("crc==>$crc16CheckSum");
+    LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
+
+    var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(0, allOTAData.length, crc16CheckSum, "1.3_CRC0F1B"), 0);
+
+    _sendMessage(bleLockPackage);
+  }
+
   // 清空本地的所有的opus文件
   Future<void> clearOpusFiles() async {
     try {
@@ -539,7 +576,7 @@ class AssistantLogic extends GetxController {
 
       if (deviceMatches.isNotEmpty) {
         var targetDevice = deviceMatches.first;
-        BleService().writeData(targetDevice, bytes);
+        BleService().writeData(targetDevice, bytes, targetDevice.mtuNow);
       } else {
         LogUtil.log.e("设备未连接或找不到设备: ${deviceInfo["deviceId"]}");
       }
@@ -695,7 +732,7 @@ class AssistantLogic extends GetxController {
 
     if (deviceMatches.isNotEmpty) {
       var targetDevice = deviceMatches.first;
-      BleService().writeData(targetDevice, directive);
+      BleService().writeData(targetDevice, directive, targetDevice.mtuNow);
     } else {
       LogUtil.log.e("设备未连接或找不到设备: ${deviceInfo["deviceId"]}");
     }
