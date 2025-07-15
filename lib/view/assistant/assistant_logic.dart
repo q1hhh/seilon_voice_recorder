@@ -155,9 +155,9 @@ class AssistantLogic extends GetxController {
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
       { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
-      { "text": "进入OTA升级模式(wifi: 06)", "press": () => startOTA() },
-      { "text": "进入OTA升级模式(BLE1: CPS8602)", "press": () => startOTAForBle() },
-      { "text": "进入OTA升级模式(BLE2: 05)", "press": () => startOTAForBle2() },
+      { "text": "进入OTA升级模式(wifi: 06)", "press": () => startOTA("bin/ota_all_4.4.0.06.bin", "4.4.0.06", 2) },
+      { "text": "进入OTA升级模式(BLE1: CPS8602)", "press": () => startOTA("bin/CPS8602_MTP_00_5C_V1.3_CRC0F1B.bin", "1.3_CRC0F1B", 0) },
+      { "text": "进入OTA升级模式(BLE2: 05)", "press": () => startOTA("bin/ota_all_4.4.0.05.bin", "4.4.0.05", 0) },
       { "text": "开始OTA升级", "press": () => sendUpgradePacket() },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
@@ -471,18 +471,27 @@ class AssistantLogic extends GetxController {
   }
 
   // 进入OTA升级模式
-  startOTA() async {
-    ByteData data = await rootBundle.load('bin/ota_all_4.4.0.06.bin');
+  startOTA(String fileName, String version, int otaType) async {
+    this.otaType = otaType;
+
+    ByteData data = await rootBundle.load(fileName);
     allOTAData = data.buffer.asUint8List();
 
-    Uint8List checkSum = Crc16Util.calculateBigEndian(allOTAData);
-    String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
+    Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
+    String crc32CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
 
-    LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
-    LogUtil.log.i("crc==>$crc16CheckSum");
-    LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
+    // ViewLogUtil.info("OTA升级文件: $fileName");
+    // ViewLogUtil.info("OTA升级文件大小: ${allOTAData.length}");
+    ViewLogUtil.info("crc==>${ByteUtil.hexStringToUint8ListLittleEndian(crc32CheckSum)}");
 
-    var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(2, allOTAData.length, crc16CheckSum, "4.4.0.06"), 0);
+    var startOTAMessage = StartOtaMessage(otaType, allOTAData.length, crc32CheckSum, version);
+
+    ViewLogUtil.info("开始升级==> 类型: ${startOTAMessage.data[0]}, "
+        "bin文件名称: $fileName, bin文件大小: ${allOTAData.length}, "
+        "CRC: ${ByteUtil.uint8ListToHexFull(Uint8List.fromList((startOTAMessage.data.getRange(5, 9).toList())))}, "
+        "版本号: ${startOTAMessage.data.getRange(9, 24)}");
+
+    var bleLockPackage = BleControlPackage.toBleLockPackage(startOTAMessage, 0);
 
     _sendMessage(bleLockPackage);
   }
@@ -497,38 +506,38 @@ class AssistantLogic extends GetxController {
   }
 
   // 进入蓝牙OTA升级(第一个)
-  startOTAForBle() async {
-    ByteData data = await rootBundle.load('bin/CPS8602_MTP_00_5C_V1.3_CRC0F1B.bin');
-    allOTAData = data.buffer.asUint8List();
-
-    Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
-    String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
-
-    LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
-    LogUtil.log.i("crc==>$crc16CheckSum");
-    LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
-
-    var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(0, allOTAData.length, crc16CheckSum, "4.4.0.06"), 0);
-
-    _sendMessage(bleLockPackage);
-  }
+  // startOTAForBle() async {
+  //   ByteData data = await rootBundle.load('bin/CPS8602_MTP_00_5C_V1.3_CRC0F1B.bin');
+  //   allOTAData = data.buffer.asUint8List();
+  //
+  //   Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
+  //   String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
+  //
+  //   LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
+  //   LogUtil.log.i("crc==>$crc16CheckSum");
+  //   LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
+  //
+  //   var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(0, allOTAData.length, crc16CheckSum, "4.4.0.06"), 0);
+  //
+  //   _sendMessage(bleLockPackage);
+  // }
 
   // 进入蓝牙OTA升级(第二个)
-  startOTAForBle2() async {
-    ByteData data = await rootBundle.load('ota_all_4.4.0.05.bin');
-    allOTAData = data.buffer.asUint8List();
-
-    Uint8List checkSum = Crc16Util.calculateBigEndian(allOTAData);
-    String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
-
-    LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
-    LogUtil.log.i("crc==>$crc16CheckSum");
-    LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
-
-    var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(0, allOTAData.length, crc16CheckSum, "1.3_CRC0F1B"), 0);
-
-    _sendMessage(bleLockPackage);
-  }
+  // startOTAForBle2() async {
+  //   ByteData data = await rootBundle.load('ota_all_4.4.0.05.bin');
+  //   allOTAData = data.buffer.asUint8List();
+  //
+  //   Uint8List checkSum = Crc16Util.calculateBigEndian(allOTAData);
+  //   String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
+  //
+  //   LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
+  //   LogUtil.log.i("crc==>$crc16CheckSum");
+  //   LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
+  //
+  //   var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(0, allOTAData.length, crc16CheckSum, "1.3_CRC0F1B"), 0);
+  //
+  //   _sendMessage(bleLockPackage);
+  // }
 
   // 清空本地的所有的opus文件
   Future<void> clearOpusFiles() async {
