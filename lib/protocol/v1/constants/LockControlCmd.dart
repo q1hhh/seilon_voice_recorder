@@ -33,6 +33,8 @@ class LockControlCmd {
   static const CMD_RECORDER_RECORDING_REPORT      = 0x12;//录音上报
   static const CMD_RECORDER_CONTROL_KEYS          = 0x13;//拨码开关上报
   static const CMD_RECORDER_TIMEOUT_RECORDING_PROMPT= 0x14;//忘记录音提示上报
+  static const CMD_RECORDER_POWER_OFF= 0x0A;//关机
+
 
   static const CMD_RECORDER_REAL_TIME_STREAMING   = 0x20;//实时流语音上传
   static const CMD_RECORDER_AUDIO_FILE_COUNT  = 0x21;//音频文件列表数量读取

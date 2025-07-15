@@ -42,6 +42,7 @@ import 'package:uuid/uuid.dart';
 import '../../controllers/deviceInfo_control.dart';
 import '../../protocol/v1/constants/LockControlCmd.dart';
 import '../../protocol/v1/system_setting_message/upgrade_packet_message.dart';
+import '../../protocol/v1/voice_recorder_message/power_control_message.dart';
 import '../../protocol/v1/voice_recorder_message/start_ota_message.dart';
 import '../../protocol/v1/voice_recorder_message/readAudioFileListMessage.dart';
 import '../../protocol/v1/voice_recorder_message/read_audio_file_content_message.dart';
@@ -136,6 +137,7 @@ class AssistantLogic extends GetxController {
       { "text": "进入绑定", "press": startBindDevice },
       { "text": "开始握手", "press": startHandShake },
       { "text": "完成绑定", "press": completeBinding },
+      { "text": "关机", "press": powerOff },
       { "text": "获取设备信息New", "press": getDeviceInfoV2 },
       { "text": "开启录音(通话录音模式)", "press": () => controlSoundRecording(1, 0) },
       { "text": "开启录音(会议录音模式)", "press": () => controlSoundRecording(1, 1) },
@@ -156,6 +158,7 @@ class AssistantLogic extends GetxController {
       { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
       { "text": "进入OTA升级模式(绿联)", "press": () => startOTA("bin/ugreen_converted.bin", "0.1", 0) },
+      { "text": "进入OTA升级模式(10)", "press": () => startOTA("bin/R8711_ota_4.4.0.10.bin", "4.4.0.10", 2) },
       { "text": "进入OTA升级模式(08)", "press": () => startOTA("bin/ota_all_4.4.0.08.bin", "4.4.0.08", 2) },
       { "text": "进入OTA升级模式(07)", "press": () => startOTA("bin/ota_all_4.4.0.07.bin", "4.4.0.07", 2) },
       { "text": "进入OTA升级模式(06)", "press": () => startOTA("bin/ota_all_4.4.0.06.bin", "4.4.0.06", 2) },
@@ -223,6 +226,12 @@ class AssistantLogic extends GetxController {
   // 完成绑定
   completeBinding() {
     var bleLockPackage = BleControlPackage.toBleLockPackage(CompleteNetWorkMessage(true), 0);
+    _sendMessage(bleLockPackage);
+  }
+
+  // 关机
+  powerOff() {
+    var bleLockPackage = BleControlPackage.toBleLockPackage(PowerControlMessage(1), 0);
     _sendMessage(bleLockPackage);
   }
 
