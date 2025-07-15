@@ -155,9 +155,10 @@ class AssistantLogic extends GetxController {
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
       { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
-      { "text": "进入OTA升级模式(wifi: 06)", "press": () => startOTA("bin/ota_all_4.4.0.06.bin", "4.4.0.06", 2) },
-      { "text": "进入OTA升级模式(BLE1: CPS8602)", "press": () => startOTA("bin/CPS8602_MTP_00_5C_V1.3_CRC0F1B.bin", "1.3_CRC0F1B", 0) },
-      { "text": "进入OTA升级模式(BLE2: 05)", "press": () => startOTA("bin/ota_all_4.4.0.05.bin", "4.4.0.05", 0) },
+      { "text": "进入OTA升级模式(wifi: 06)", "press": () => startOTA("bin/ota_all_4.4.0.06.bin", "1.6", 2) },
+      { "text": "进入OTA升级模式(BLE1: CPS8602)", "press": () => startOTA("bin/CPS8602_MTP_00_5C_V1.3_CRC0F1B.bin", "1.3", 0) },
+      { "text": "进入OTA升级模式(BLE2: 05)", "press": () => startOTA("bin/ota_all_4.4.0.05.bin", "1.5", 0) },
+      { "text": "进入OTA升级模式(BLE3: 0P01_back)", "press": () => startOTA("bin/0P01_back.bin", "1.6", 0) },
       { "text": "开始OTA升级", "press": () => sendUpgradePacket() },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
@@ -344,10 +345,7 @@ class AssistantLogic extends GetxController {
   // 读取单个音频文件内容
   readAudioFileContent() async {
     if(fileList.isEmpty) return;
-    // if(DeviceInfoController().messageType.value == "TCP") {
-    //   readAudioFileContentTCP();
-    //   return;
-    // }
+
     TcpUtil().dataTotal = 0;
     TcpUtil().tempData.clear();
     fileListContent.clear();
@@ -365,102 +363,7 @@ class AssistantLogic extends GetxController {
 
     var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(fileName, 0, 900), 0);
     _sendMessage(bleLockPackage);
-    // for (int offset = 0; offset < fileSize; offset += chunkSize) {
-    //   readNum++;
-    //   int len = (fileSize - offset) >= chunkSize ? chunkSize : (fileSize - offset);
-    //   LogUtil.log.i("读取次数===>${readNum}----读取的长度${len}");
-    //
-    //   var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(fileName, offset, len), 0);
-    //   _sendMessage(bleLockPackage);
-    // }
-
   }
-
-  // Future<void> readAudioFileContentTCP() async {
-  //   if (fileList.isEmpty) return;
-  //
-  //   fileListContent = [];
-  //   var fileName = fileList[0]['fileName'];
-  //   var fileSize = fileList[0]['fileSize'];
-  //   print("读取的文件--$fileName--$fileSize");
-  //
-  //   currentFileName = fileName;
-  //   currentFileSize = fileSize;
-  //
-  //   int chunkSize = 900;
-  //   int readNum = 0;
-  //
-  //   for (TcpUtil().startOffset; TcpUtil().startOffset < fileSize; TcpUtil().startOffset += chunkSize) {
-  //     readNum++;
-  //     int len = (fileSize - TcpUtil().startOffset) >= chunkSize ? chunkSize : (fileSize - TcpUtil().startOffset);
-  //     LogUtil.log.i("读取次数===>${readNum}----读取的长度${len}");
-  //
-  //     var bleLockPackage = BleControlPackage.toBleLockPackage(
-  //       ReadAudioFileContentMessage(fileName, TcpUtil().startOffset, len),
-  //       0,
-  //     );
-  //
-  //     timeoutTimer = Timer(Duration(seconds: 1), () async {
-  //       if (!(TcpUtil().responseCompleter?.isCompleted ?? true)) {
-  //         LogUtil.log.w("响应超时，重发offset=${TcpUtil().startOffset}");
-  //         await TcpUtil().sendDataAndWait(bleLockPackage);
-  //       }
-  //     });
-  //
-  //     // 这里调用 sendDataAndWait 等待响应
-  //     await TcpUtil().sendDataAndWait(bleLockPackage);
-  //   }
-  //   print("所有分包发送完成");
-  // }
-
-  Future<void> readAudioFileContentTCP() async {
-    if (fileList.isEmpty) return;
-    fileListContent.clear();
-    fileListContent.refresh();
-
-    var fileName = fileList[0]['fileName'];
-    var fileSize = fileList[0]['fileSize'];
-    print("读取的文件--$fileName--$fileSize");
-
-    currentFileName.value = fileName;
-    currentFileSize.value = fileSize;
-
-    int chunkSize = 900;
-    int readNum = 0;
-    int offset = 0;
-
-    while (offset < fileSize) {
-      expectedOffset = offset;
-      readNum++;
-      int len = (fileSize - offset) >= chunkSize ? chunkSize : (fileSize - offset);
-
-      LogUtil.log.i("当前发送位置: $offset, 当前发送次数: $readNum");
-      var bleLockPackage = BleControlPackage.toBleLockPackage(
-        ReadAudioFileContentMessage(fileName, offset, len),
-        0,
-      );
-      responseCompleter = Completer<void>();
-
-      // 发送一次
-      TcpUtil().sendDataAndWait(bleLockPackage.toBytes(MyAppCommon.DEVICE_DEFAULT_KEY));
-
-      // 启动1秒超时定时器
-      timeoutTimer = Timer(Duration(seconds: 1), () {
-        if (!(responseCompleter?.isCompleted ?? true)) {
-          LogUtil.log.w("响应超时，重发offset=$offset");
-          TcpUtil().sendDataAndWait(bleLockPackage.toBytes(MyAppCommon.DEVICE_DEFAULT_KEY));
-        }
-      });
-
-      // 等待响应
-      await responseCompleter!.future;
-      timeoutTimer?.cancel();
-
-      offset += len;
-    }
-    print("所有分包发送完成, 发送次数: $readNum");
-  }
-
 
   // 删除文件
   removeAudioFile(String? fileName) {
@@ -480,8 +383,6 @@ class AssistantLogic extends GetxController {
     Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
     String crc32CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
 
-    // ViewLogUtil.info("OTA升级文件: $fileName");
-    // ViewLogUtil.info("OTA升级文件大小: ${allOTAData.length}");
     ViewLogUtil.info("crc==>${ByteUtil.hexStringToUint8ListLittleEndian(crc32CheckSum)}");
 
     var startOTAMessage = StartOtaMessage(otaType, allOTAData.length, crc32CheckSum, version);
@@ -504,40 +405,6 @@ class AssistantLogic extends GetxController {
 
     LogUtil.log.i("分包：index=$currentPackAgeIndex, 当前长度=${splitData.first.length}");
   }
-
-  // 进入蓝牙OTA升级(第一个)
-  // startOTAForBle() async {
-  //   ByteData data = await rootBundle.load('bin/CPS8602_MTP_00_5C_V1.3_CRC0F1B.bin');
-  //   allOTAData = data.buffer.asUint8List();
-  //
-  //   Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
-  //   String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
-  //
-  //   LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
-  //   LogUtil.log.i("crc==>$crc16CheckSum");
-  //   LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
-  //
-  //   var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(0, allOTAData.length, crc16CheckSum, "4.4.0.06"), 0);
-  //
-  //   _sendMessage(bleLockPackage);
-  // }
-
-  // 进入蓝牙OTA升级(第二个)
-  // startOTAForBle2() async {
-  //   ByteData data = await rootBundle.load('ota_all_4.4.0.05.bin');
-  //   allOTAData = data.buffer.asUint8List();
-  //
-  //   Uint8List checkSum = Crc16Util.calculateBigEndian(allOTAData);
-  //   String crc16CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
-  //
-  //   LogUtil.log.i("OTA升级文件大小-->${allOTAData.length}");
-  //   LogUtil.log.i("crc==>$crc16CheckSum");
-  //   LogUtil.log.i(ByteUtil.hexStringToUint8ListLittleEndian(crc16CheckSum));
-  //
-  //   var bleLockPackage = BleControlPackage.toBleLockPackage(StartOtaMessage(0, allOTAData.length, crc16CheckSum, "1.3_CRC0F1B"), 0);
-  //
-  //   _sendMessage(bleLockPackage);
-  // }
 
   // 清空本地的所有的opus文件
   Future<void> clearOpusFiles() async {
