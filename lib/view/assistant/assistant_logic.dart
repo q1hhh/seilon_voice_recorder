@@ -166,15 +166,7 @@ class AssistantLogic extends GetxController {
       { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
       { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
-      { "text": "进入OTA升级模式(绿联)", "press": () => startOTA("bin/ugreen_converted.bin", "0.1", 0) },
-      { "text": "进入OTA升级模式(51DF9E9C)", "press": () => startOTA("bin/PB589_CS32G023_CS_51DF9E9C.bin", "0.2", 2) },
-      { "text": "进入OTA升级模式(10)", "press": () => startOTA("bin/R8711_ota_4.4.0.10.bin", "4.4.0.10", 2) },
-      { "text": "进入OTA升级模式(08)", "press": () => startOTA("bin/ota_all_4.4.0.08.bin", "4.4.0.08", 2) },
-      { "text": "进入OTA升级模式(07)", "press": () => startOTA("bin/ota_all_4.4.0.07.bin", "4.4.0.07", 2) },
-      { "text": "进入OTA升级模式(06)", "press": () => startOTA("bin/ota_all_4.4.0.06.bin", "4.4.0.06", 2) },
-      { "text": "进入OTA升级模式(CPS8602)", "press": () => startOTA("bin/CPS8602_MTP_00_5C_V1.3_CRC0F1B.bin", "1.3", 0) },
-      { "text": "进入OTA升级模式(05)", "press": () => startOTA("bin/ota_all_4.4.0.05.bin", "4.4.0.05", 0) },
-      { "text": "进入OTA升级模式(0P01_back)", "press": () => startOTA("bin/0P01_back.bin", "4.4.0.06", 0) },
+      { "text": "进入OTA升级模式", "press": startOTA },
       { "text": "开始OTA升级", "press": () => sendUpgradePacket() },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
@@ -396,29 +388,29 @@ class AssistantLogic extends GetxController {
   }
 
   // 进入OTA升级模式
-  startOTA(String fileName, String version, int otaType) async {
+  startOTA() async {
     showOTAModeDialog();
     return;
-    this.otaType = otaType;
-
-    ByteData data = await rootBundle.load(fileName);
-    allOTAData = data.buffer.asUint8List();
-
-    Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
-    String crc32CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
-
-    ViewLogUtil.info("crc==>${crc32CheckSum}");
-
-    var startOTAMessage = StartOtaMessage(otaType, allOTAData.length, crc32CheckSum, version);
-
-    ViewLogUtil.info("开始升级==> 类型: ${startOTAMessage.data[0]}, "
-        "bin文件名称: $fileName, bin文件大小: ${allOTAData.length}, "
-        "CRC: ${ByteUtil.uint8ListToHexFull(Uint8List.fromList((startOTAMessage.data.getRange(5, 9).toList())))}, "
-        "版本号: ${startOTAMessage.data.getRange(9, 24)}");
-
-    var bleLockPackage = BleControlPackage.toBleLockPackage(startOTAMessage, 0);
-
-    _sendMessage(bleLockPackage);
+    // this.otaType = otaType;
+    //
+    // ByteData data = await rootBundle.load(fileName);
+    // allOTAData = data.buffer.asUint8List();
+    //
+    // Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
+    // String crc32CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
+    //
+    // ViewLogUtil.info("crc==>${crc32CheckSum}");
+    //
+    // var startOTAMessage = StartOtaMessage(otaType, allOTAData.length, crc32CheckSum, version);
+    //
+    // ViewLogUtil.info("开始升级==> 类型: ${startOTAMessage.data[0]}, "
+    //     "bin文件名称: $fileName, bin文件大小: ${allOTAData.length}, "
+    //     "CRC: ${ByteUtil.uint8ListToHexFull(Uint8List.fromList((startOTAMessage.data.getRange(5, 9).toList())))}, "
+    //     "版本号: ${startOTAMessage.data.getRange(9, 24)}");
+    //
+    // var bleLockPackage = BleControlPackage.toBleLockPackage(startOTAMessage, 0);
+    //
+    // _sendMessage(bleLockPackage);
   }
 
   // 输入OTA升级模式的弹窗
@@ -549,7 +541,12 @@ class AssistantLogic extends GetxController {
 
       var startOTAMessage = StartOtaMessage(otaType, allOTAData.length, crc32CheckSum, otaVersion);
 
-      ViewLogUtil.info("OTA升级模式: ${otaModeController.text}, 文件名称: ${result.files.single.name}, 文件长度: ${bytes.length}, 版本号: $otaVersion");
+      ViewLogUtil.info("OTA升级模式: ${otaModeController.text}, 文件名称: ${result.files.single.name}, "
+          "文件长度: ${bytes.length}, 版本号: $otaVersion, CRC: $crc32CheckSum");
+
+      var bleLockPackage = BleControlPackage.toBleLockPackage(startOTAMessage, 0);
+
+      _sendMessage(bleLockPackage);
     }
   }
 
