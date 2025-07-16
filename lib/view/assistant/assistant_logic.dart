@@ -68,6 +68,8 @@ import 'package:path/path.dart' as path;
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 
+import '../file_list/page/file_list_page.dart';
+
 class AssistantLogic extends GetxController {
   var homeLogic = Get.find<HomeControl>();
 
@@ -113,17 +115,23 @@ class AssistantLogic extends GetxController {
 
   // ==============================
 
+  TextEditingController otaModeController = TextEditingController();
+  TextEditingController otaFileVersionController = TextEditingController();
+
+  // OTA升级的总数据
   late Uint8List allOTAData;
-  // 当前发送的OTA数据包
-  late Uint8List currentSplitData;
-  // OTA数据包的长度
+  // OTA数据包的长度(设备回复)
   late int maxDataLength = 0;
   // OTA数据包(用于分包发送)
   Queue<Uint8List> splitData = Queue();
   // 当前发送包的标识(1~N)
   int currentPackAgeIndex = 1;
-  // OTA升级模式
+  // OTA升级模式(0, 1, 2)
   int otaType = 2;
+  // OTA升级文件版本
+  String otaVersion = "";
+  // OTA升级文件名称
+  String otaFileName = "";
 
   @override
   void onClose() {
@@ -138,6 +146,7 @@ class AssistantLogic extends GetxController {
       { "text": "开始握手", "press": startHandShake },
       { "text": "完成绑定", "press": completeBinding },
       { "text": "关机", "press": powerOff },
+      { "text": "查看文件列表", "press": () => showCustomDialog(Get.context!) },
       { "text": "获取设备信息New", "press": getDeviceInfoV2 },
       { "text": "开启录音(通话录音模式)", "press": () => controlSoundRecording(1, 0) },
       { "text": "开启录音(会议录音模式)", "press": () => controlSoundRecording(1, 1) },
@@ -158,6 +167,7 @@ class AssistantLogic extends GetxController {
       { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
       { "text": "进入OTA升级模式(绿联)", "press": () => startOTA("bin/ugreen_converted.bin", "0.1", 0) },
+      { "text": "进入OTA升级模式(51DF9E9C)", "press": () => startOTA("bin/PB589_CS32G023_CS_51DF9E9C.bin", "0.2", 2) },
       { "text": "进入OTA升级模式(10)", "press": () => startOTA("bin/R8711_ota_4.4.0.10.bin", "4.4.0.10", 2) },
       { "text": "进入OTA升级模式(08)", "press": () => startOTA("bin/ota_all_4.4.0.08.bin", "4.4.0.08", 2) },
       { "text": "进入OTA升级模式(07)", "press": () => startOTA("bin/ota_all_4.4.0.07.bin", "4.4.0.07", 2) },
@@ -387,6 +397,8 @@ class AssistantLogic extends GetxController {
 
   // 进入OTA升级模式
   startOTA(String fileName, String version, int otaType) async {
+    showOTAModeDialog();
+    return;
     this.otaType = otaType;
 
     ByteData data = await rootBundle.load(fileName);
@@ -407,6 +419,138 @@ class AssistantLogic extends GetxController {
     var bleLockPackage = BleControlPackage.toBleLockPackage(startOTAMessage, 0);
 
     _sendMessage(bleLockPackage);
+  }
+
+  // 输入OTA升级模式的弹窗
+  showOTAModeDialog() {
+    showDialog(
+      context: Get.context!,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Text(
+            'OTA升级模式',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18),
+          ),
+          content: SizedBox(
+            height: 120,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                TextField(
+                  controller: otaModeController,
+                  style: TextStyle(fontSize: 16),
+                  decoration: const InputDecoration(
+                    hintText: '输入OTA升级模式(1位数字)',
+                    hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                    border: OutlineInputBorder(),
+                    enabledBorder: OutlineInputBorder(  // 未聚焦时的边框
+                      borderSide: BorderSide(color: Colors.deepPurpleAccent, width: 1),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.deepPurpleAccent, width: 1),
+                    ),
+                  ),
+                ),
+                TextField(
+                  controller: otaFileVersionController,
+                  style: TextStyle(fontSize: 16),
+                  decoration: const InputDecoration(
+                    hintText: '输入OTA升级文件版本',
+                    hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                    border: OutlineInputBorder(),
+                    enabledBorder: OutlineInputBorder(  // 未聚焦时的边框
+                      borderSide: BorderSide(color: Colors.deepPurpleAccent, width: 1),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderSide: BorderSide(color: Colors.deepPurpleAccent, width: 1),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            Center(
+              child: Container(
+                width: double.infinity,
+                height: 36,
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryColor,
+                    foregroundColor: Colors.white,
+                    elevation: 2,
+                    shadowColor: AppColors.shadowColor.withOpacity(0.3),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                  ),
+                  onPressed: () async {
+                    if(otaModeController.text != otaModeController.text.trim()
+                        || otaFileVersionController.text != otaFileVersionController.text.trim()) {
+                      print("两边有空格");
+                      return;
+                    }
+                    if(otaModeController.text.isEmpty || otaModeController.text.length > 1 || otaFileVersionController.text.isEmpty) return;
+                    try {
+                      if((int.parse(otaModeController.text) is int)) {
+                        otaType = int.parse(otaModeController.text);
+                        otaVersion = otaFileVersionController.text;
+
+                        Navigator.of(ctx).pop();
+                        if(await requestStoragePermission()) {
+                          pickAndReadFile();
+                        }
+                      }
+                    } catch (e) {
+                      print("出错--->$e");
+                    }
+                  },
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(width: 4),
+                      Text(
+                        "确定",
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            )
+          ],
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.0), // 圆角
+          ),
+        );
+      },
+    );
+  }
+
+  // 选择文件
+  Future<void> pickAndReadFile() async {
+    // 让用户选择一个文件
+    FilePickerResult? result = await FilePicker.platform.pickFiles();
+    if (result != null && result.files.single.path != null) {
+      File file = File(result.files.single.path!);
+      // otaFileName
+
+      List<int> bytes = await file.readAsBytes();
+      
+      allOTAData = Uint8List.fromList(bytes);
+
+      Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
+      String crc32CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
+
+      var startOTAMessage = StartOtaMessage(otaType, allOTAData.length, crc32CheckSum, otaVersion);
+
+      ViewLogUtil.info("OTA升级模式: ${otaModeController.text}, 文件名称: ${result.files.single.name}, 文件长度: ${bytes.length}, 版本号: $otaVersion");
+    }
   }
 
   // 发送OTA升级数据
@@ -840,11 +984,11 @@ class AssistantLogic extends GetxController {
     LogUtil.log.i("录音数据--->$allOpusData");
     Uint8List pcmData = await MyPcmUtil.decodeAllOpus(Uint8List.fromList(allOpusData));
 
-    var channels = 1;
+    var channels = 2;
     // 双声道
-    if(allOpusData[3] > 40) {
-      channels = 2;
-    }
+    // if(allOpusData[3] > 40) {
+    //   channels = 2;
+    // }
 
     // final file = File('/storage/emulated/0/Download/output.pcm');
     // await file.writeAsBytes(pcmData);
@@ -898,6 +1042,55 @@ class AssistantLogic extends GetxController {
       bytes.setInt32(0, value, Endian.little);
     }
     return bytes.buffer.asUint8List();
+  }
+
+
+  void showCustomDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        // 获取屏幕宽度
+        double dialogWidth = MediaQuery.of(context).size.width * 0.99;
+        double dialogHeight = MediaQuery.of(context).size.height * 0.8;
+
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12.0),
+          ),
+          child: SizedBox(
+            width: dialogWidth,
+            height: dialogHeight,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Center(
+                    child: Text(
+                      "文件列表",
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  flex: 1,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: FileListPage() // 你的内容
+                ),),
+                Container(
+                  color: Colors.red,
+                  child: Text("分页"),
+                ),
+                SizedBox(
+                  height: 10,
+                )
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
 

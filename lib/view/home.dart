@@ -59,9 +59,9 @@ class HomePage extends StatelessWidget {
           child: Column(
             children: [
               const SizedBox(height: 16),
-              // Expanded(
-              //   child: DeviceList(),
-              // ),
+              Expanded(
+                child: DeviceList(),
+              ),
               Container(
                 margin: const EdgeInsets.only(bottom: 16),
                 child: const Text(

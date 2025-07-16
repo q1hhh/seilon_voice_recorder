@@ -7,11 +7,11 @@ class MyPcmUtil {
 
   static Future<Uint8List> decodeAllOpus(Uint8List fullData) async {
     const sampleRate = 16000;
-    const channels = 1;
+    const channels = 2;
     final decoder = SimpleOpusDecoder(sampleRate: sampleRate, channels: channels);
 
     final pcmBuffer = BytesBuilder();
-    final frameHeader = Uint8List.fromList([0x00, 0x00, 0x00, 0x28]);
+    final frameHeader = Uint8List.fromList([0x00, 0x00, 0x00, 0x50]);
 
     int offset = 0;
     while (offset < fullData.length) {
