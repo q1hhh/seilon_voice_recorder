@@ -76,7 +76,7 @@ class FileListPage extends StatelessWidget {
                   const SizedBox(width: 3),
                   GestureDetector(
                     onTap: () {},
-                    child: Text("${(assistantLogic.fileList[fileIndex]["fileSize"] / 1000).toStringAsFixed(2)}k", style: TextStyle(fontSize: 12),),
+                    child: Text(formatFileSize(assistantLogic.fileList[fileIndex]["fileSize"]), style: TextStyle(fontSize: 12),),
                   ),
                   const SizedBox(width: 3),
                 ],
@@ -86,6 +86,18 @@ class FileListPage extends StatelessWidget {
         ))
       ),
     );
+  }
+}
+
+String formatFileSize(num size) {
+  if (size < 1024) {
+    return "$size b";
+  } else if (size < 1024 * 1024) {
+    return "${(size / 1024).toStringAsFixed(2)}KB";
+  } else if (size < 1024 * 1024 * 1024) {
+    return "${(size / (1024 * 1024)).toStringAsFixed(2)}MB";
+  } else {
+    return "${(size / (1024 * 1024 * 1024)).toStringAsFixed(2)}GB";
   }
 }
 
