@@ -6,7 +6,7 @@ class LoadingUtil {
 
   static Timer? _timer;
 
-  static void show({time,title}) {
+  static void show({title,time}) {
     EasyLoading.show(status: title??'');
 
     _timer = Timer(Duration(seconds: time??20), () {
@@ -22,11 +22,9 @@ class LoadingUtil {
       EasyLoading.dismiss();
     });
   }
-
   static void showSuccess(String tip){
     EasyLoading.showSuccess(tip);
   }
-
   static void showError(String tip){
     EasyLoading.showError(tip);
   }
@@ -34,7 +32,7 @@ class LoadingUtil {
   static void showToast(String tip) {
     EasyLoading.showToast(
         tip,
-        toastPosition: EasyLoadingToastPosition.bottom,
+        toastPosition: EasyLoadingToastPosition.center,
         maskType: EasyLoadingMaskType.none
     );
   }

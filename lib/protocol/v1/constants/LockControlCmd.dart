@@ -43,5 +43,5 @@ class LockControlCmd {
   static const CMD_RECORDER_AUDIO_FILE_REMOVE   = 0x24;//单个音频文件删除
   static const CMD_RECORDER_AUDIO_FILE_REMOVE_ALL   = 0x25;//全部音频文件删除
   static const CMD_RECORDER_AUDIO_FILE_CONTENT_FAST   = 0x26;//单个音频文件读取快速
-  static const CMD_RECORDER_AUDIO_FILE_REMOVE_ALL_FAST_UPLOAD   = 0x27;//单个音频文件读取快速上传
+  static const CMD_RECORDER_AUDIO_FILE_ALL_FAST_UPLOAD   = 0x27;//单个音频文件读取快速上传
 }

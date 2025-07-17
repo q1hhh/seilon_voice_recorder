@@ -18,6 +18,7 @@ import 'package:Recording_pen/protocol/v1/voice_recorder_message/screen_control_
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/start_ota_reply_message.dart';
 import 'package:Recording_pen/protocol/v1/voice_recorder_message/upgrade_package_reply_message.dart';
 import 'package:Recording_pen/util/ByteUtil.dart';
+import 'package:Recording_pen/util/loading_util.dart';
 import 'package:Recording_pen/util/log_util.dart';
 import 'package:Recording_pen/util/my_pcm_util.dart';
 import 'package:Recording_pen/util/view_log_util.dart';
@@ -69,29 +70,39 @@ import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 
 import '../file_list/page/file_list_page.dart';
+import '../pagination.dart';
 
 class AssistantLogic extends GetxController {
   var homeLogic = Get.find<HomeControl>();
 
+  // 文件列表弹窗显示
+  RxBool fileDialogShow = false.obs;
+
   // 读取内容的文件名
   RxString currentFileName = "".obs;
-  // 读取内容的文件大小
+  // 读取文件的内容大小
   RxInt currentFileSize = 0.obs;
   
   // 暂存读取文件的内容
   RxList fileListContent = [].obs;
 
   // 文件列表总共多少页
-  RxInt filePageCount = 0.obs;
+  RxInt fileTotalCount = 5.obs;
 
-  // 当前读取文件列表的位置(页码)
-  RxInt filePageNum = 0.obs;
+  // 当前页码
+  RxInt filePageNum = 1.obs;
 
-  // 每页最多读16
+  // 读取文件列表的起始位置
+  RxInt fileStart = 0.obs;
+
+  // 每页读取多少个文件
   RxInt filePageSize = 16.obs;
 
+  // 每次读取多少文件内容
+  RxInt maxFileContentLength = 900.obs;
+
   // 读取到的文件的总数量
-  RxInt fileListCount = 0.obs;
+  RxInt fileListCount = 99.obs;
 
   //读取到的文件列表
   RxList fileList = [].obs;
@@ -145,8 +156,8 @@ class AssistantLogic extends GetxController {
       { "text": "进入绑定", "press": startBindDevice },
       { "text": "开始握手", "press": startHandShake },
       { "text": "完成绑定", "press": completeBinding },
+      // { "text": "假弹窗", "press": () => showCustomDialog(Get.context!) },
       { "text": "关机", "press": powerOff },
-      { "text": "查看文件列表", "press": () => showCustomDialog(Get.context!) },
       { "text": "获取设备信息New", "press": getDeviceInfoV2 },
       { "text": "开启录音(通话录音模式)", "press": () => controlSoundRecording(1, 0) },
       { "text": "开启录音(会议录音模式)", "press": () => controlSoundRecording(1, 1) },
@@ -163,8 +174,8 @@ class AssistantLogic extends GetxController {
       { "text": "切换通信模式(BLE/TCP)", "press": () => changeType() },
       { "text": "读取音频文件列表数量", "press": () => readAudioFileListCount() },
       { "text": "读取音频文件列表", "press": () => readAudioFileList() },
-      { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
-      { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
+      // { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
+      // { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
       { "text": "进入OTA升级模式", "press": startOTA },
       { "text": "开始OTA升级", "press": () => sendUpgradePacket() },
@@ -345,38 +356,27 @@ class AssistantLogic extends GetxController {
   // 读取音频文件列表
   readAudioFileList() {
     if(fileListCount.value == 0) return;
-    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(filePageNum.value, filePageSize.value), 0);
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(fileStart.value, filePageSize.value), 0);
     _sendMessage(bleLockPackage);
-
-    if(filePageNum.value < filePageCount.value) {
-      filePageNum.value++;
-    }
-    else {
-      filePageNum.value = 0;
-    }
   }
 
   // 读取单个音频文件内容
-  readAudioFileContent() async {
+  readAudioFileContent(String readFileName, int readFileSize) async {
     if(fileList.isEmpty) return;
 
     TcpUtil().dataTotal = 0;
     TcpUtil().tempData.clear();
     fileListContent.clear();
     fileListContent.refresh();
-    var fileName = fileList[1]['fileName'];
-    var fileSize = fileList[1]['fileSize'];
-    print("读取的文件--$fileName--$fileSize");
 
-    currentFileName.value = fileName;
-    currentFileSize.value = fileSize;
+    print("读取的文件--$readFileName--$readFileSize");
 
-    // 每次读取900字节
-    int chunkSize = 900;
-    int readNum = 0;
+    currentFileName.value = readFileName;
+    currentFileSize.value = readFileSize;
 
-    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(fileName, 0, 900), 0);
+    var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(currentFileName.value, 0, maxFileContentLength.value), 0);
     _sendMessage(bleLockPackage);
+    Get.back();
   }
 
   // 删除文件
@@ -389,6 +389,7 @@ class AssistantLogic extends GetxController {
 
   // 进入OTA升级模式
   startOTA() async {
+    currentPackAgeIndex = 1;
     showOTAModeDialog();
     return;
     // this.otaType = otaType;
@@ -799,44 +800,33 @@ class AssistantLogic extends GetxController {
   // 读取音频文件列表数量(回复)
   dealAudioListCount(BleControlMessage ble) {
     var audioListCountMessage = ReadAudioListCountReplyMessage(ble);
-    // 先计算总共多少页(每页最多16个)
+    // 每页最多显示多少个
+    filePageSize.value = audioListCountMessage.pageCount ?? 16;
     fileListCount.value = audioListCountMessage.fileCount ?? 0;
-    filePageCount.value = (fileListCount.value / filePageSize.value).ceil();
 
-    ViewLogUtil.info("文件数量--->${audioListCountMessage}");
-    ViewLogUtil.info("文件页数--->${filePageCount.value}");
+    maxFileContentLength.value = audioListCountMessage.maxFileContentLength ?? 900;
 
+    var temp = (fileListCount.value / filePageSize.value);
+
+    // 总共多少页
+    fileTotalCount.value = temp == 0 ? 0 : temp.ceil();
+
+    ViewLogUtil.info("读取文件数量--->${audioListCountMessage}");
+    ViewLogUtil.info("文件页数--->${fileTotalCount.value}");
   }
 
   // 读取音频文件列表(回复)
   dealAudioList(BleControlMessage ble) {
     var audioListMessage = ReadAudioFileListReplyMessage(ble);
-    fileList.value = audioListMessage.fileList ?? [];
-    ViewLogUtil.info(audioListMessage.toString());
-    ViewLogUtil.info("当前位置: (${filePageNum.value}/${filePageCount.value})");
-  }
+    fileList.value = (audioListMessage.fileList ?? []).cast<Map<String, Object>>();
 
-  // 读取音频文件内容(回复)
-  // dealAudioFileContent(BleControlMessage ble) async {
-  //   var audioListContentMessage = ReadAudioFileContentReplyMessage(ble);
-  //   LogUtil.log.i("收到的长度${audioListContentMessage.fileContent?.length} -- 位置${audioListContentMessage.start}");
-  //
-  //   // 记录TCP回复的文件内容位置
-  //   TcpUtil().tcpOffset = audioListContentMessage.start!;
-  //
-  //   // 位置相等才存入数组中
-  //   if((TcpUtil().startOffset - 900) == TcpUtil().tcpOffset) {
-  //     fileListContent.addAll(audioListContentMessage.fileContent as List<int>);
-  //   }
-  //   else {
-  //     LogUtil.log.e("收到的包start不对，丢弃！收到${TcpUtil().tcpOffset}, 期望${TcpUtil().startOffset - 900}");
-  //   }
-  //
-  //   // 将内容存在本地
-  //   if ((currentFileSize == fileListContent.length) && await requestStoragePermission()) {
-  //     await writeToFile(fileListContent as List<int>, currentFileName);
-  //   }
-  // }
+    fileList.refresh();
+    ViewLogUtil.info(audioListMessage.toString());
+    ViewLogUtil.info("当前页码: (${filePageNum.value}/${fileTotalCount.value})");
+
+    if(fileDialogShow.value) return;
+    showCustomDialog(Get.context!);
+  }
 
   // 读取音频文件内容(回复)
   void dealAudioFileContent(BleControlMessage ble) async {
@@ -864,8 +854,18 @@ class AssistantLogic extends GetxController {
     // responseCompleter?.complete();
     // 如果全部接收完毕
     if ((currentFileSize.value == fileListContent.length) && await requestStoragePermission()) {
-      // await writeToFile(fileListContent.value.cast<int>(), currentFileName.value);
       await writeToExternalStorage(Uint8List.fromList(fileListContent.value.cast<int>()), currentFileName.value);
+    }
+  }
+
+  // 删除文件回复
+  dealRemoveFileReply(BleControlMessage ble) {
+    if(ble.isSuccess()) {
+      LoadingUtil.showSuccess("删除成功");
+      Get.back();
+    }
+    else {
+      LoadingUtil.showSuccess("删除失败");
     }
   }
 
@@ -1041,27 +1041,30 @@ class AssistantLogic extends GetxController {
     return bytes.buffer.asUint8List();
   }
 
-
+  // 文件列表弹窗
   void showCustomDialog(BuildContext context) {
+    fileDialogShow.value = true;
+
     showDialog(
       context: context,
       builder: (BuildContext ctx) {
         // 获取屏幕宽度
-        double dialogWidth = MediaQuery.of(context).size.width * 0.99;
+        double dialogWidth = MediaQuery.of(context).size.width * 0.90;
         double dialogHeight = MediaQuery.of(context).size.height * 0.8;
 
         return Dialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12.0),
           ),
+          insetPadding: EdgeInsets.zero,
           child: SizedBox(
             width: dialogWidth,
             height: dialogHeight,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
+                const Padding(
+                  padding: EdgeInsets.all(16),
                   child: Center(
                     child: Text(
                       "文件列表",
@@ -1075,11 +1078,22 @@ class AssistantLogic extends GetxController {
                     padding: const EdgeInsets.all(16.0),
                     child: FileListPage() // 你的内容
                 ),),
-                Container(
-                  color: Colors.red,
-                  child: Text("分页"),
-                ),
-                SizedBox(
+                Obx(() {
+                  return Pagination(
+                    total: fileListCount.value,
+                    totalPage: fileTotalCount.value,
+                    currentPage: filePageNum.value,
+                    onPageChanged: (page) {
+                      print("发生改变: $page");
+                      filePageNum.value = page;
+                      var temp = page == 1 ? 0 : page - 1;
+                      fileStart.value = filePageSize.value * temp;
+                      print("每页最多显示: $filePageSize, 读取的起始位置: $filePageNum, 读取位置: $fileStart");
+                      readAudioFileList();
+                    },
+                  );
+                }),
+                const SizedBox(
                   height: 10,
                 )
               ],
@@ -1087,7 +1101,9 @@ class AssistantLogic extends GetxController {
           ),
         );
       },
-    );
+    ).then((res) {
+      fileDialogShow.value = false;
+    });
   }
 
 
