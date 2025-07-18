@@ -43,6 +43,7 @@ import 'package:uuid/uuid.dart';
 import '../../controllers/deviceInfo_control.dart';
 import '../../protocol/v1/constants/LockControlCmd.dart';
 import '../../protocol/v1/system_setting_message/upgrade_packet_message.dart';
+import '../../protocol/v1/voice_recorder_message/device_info_reply_message.dart';
 import '../../protocol/v1/voice_recorder_message/power_control_message.dart';
 import '../../protocol/v1/voice_recorder_message/start_ota_message.dart';
 import '../../protocol/v1/voice_recorder_message/readAudioFileListMessage.dart';
@@ -780,6 +781,12 @@ class AssistantLogic extends GetxController {
       allOpusData.addAll(msg); // 累积全量数据（如果你需要保存）
       opusData.addAll(msg);
     }
+  }
+
+  // 获取设备信息(回复)
+  dealDeviceInfoReplyMessage(BleControlMessage ble) {
+    var deviceInfoMessage = DeviceInfoReplyMessage(ble);
+    ViewLogUtil.info("$deviceInfoMessage");
   }
 
   dealOpenWifiMessage(BleControlMessage ble) {

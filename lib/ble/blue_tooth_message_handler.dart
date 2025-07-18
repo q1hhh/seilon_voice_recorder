@@ -231,6 +231,14 @@ class BlueToothMessageHandler {
 
       case LockControlCmd.CATEGORY_RECORDER:
         switch(ble.cmd) {
+          case LockControlCmd.CMD_RECORDER_DEVICE_INFO:
+            var realTimeStreamingMessage = RealTimeStreamingMessage(ble);
+            if (Get.isRegistered<AssistantLogic>()) {
+              var find = Get.find<AssistantLogic>();
+              find.dealDeviceInfoReplyMessage(realTimeStreamingMessage);
+            }
+            break;
+
           case LockControlCmd.CMD_RECORDER_REAL_TIME_STREAMING:
             var realTimeStreamingMessage = RealTimeStreamingMessage(ble);
             if (Get.isRegistered<AssistantLogic>()) {
