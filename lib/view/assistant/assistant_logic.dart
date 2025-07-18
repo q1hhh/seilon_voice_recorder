@@ -861,8 +861,8 @@ class AssistantLogic extends GetxController {
   // 删除文件回复
   dealRemoveFileReply(BleControlMessage ble) {
     if(ble.isSuccess()) {
-      LoadingUtil.showSuccess("删除成功");
       Get.back();
+      LoadingUtil.showSuccess("删除成功");
     }
     else {
       LoadingUtil.showSuccess("删除失败");
@@ -1084,6 +1084,8 @@ class AssistantLogic extends GetxController {
                     totalPage: fileTotalCount.value,
                     currentPage: filePageNum.value,
                     onPageChanged: (page) {
+                      fileList.clear();
+                      fileList.refresh();
                       print("发生改变: $page");
                       filePageNum.value = page;
                       var temp = page == 1 ? 0 : page - 1;

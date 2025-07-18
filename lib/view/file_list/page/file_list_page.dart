@@ -22,6 +22,10 @@ class FileListPage extends StatelessWidget {
               width: double.infinity,
               child: Row(
                 children: [
+                  Text(
+                    "${(fileIndex + 1) + (assistantLogic.filePageSize.value) * (assistantLogic.filePageNum.value - 1)}",
+                    style: TextStyle(fontSize: 15, color: Colors.black),
+                  ),
                   const Icon(Icons.description, color: Colors.blueAccent),
                   const SizedBox(width: 3),
                   Expanded(
@@ -55,6 +59,7 @@ class FileListPage extends StatelessWidget {
                           actions: [
                             AlertButton(
                               confirmCallback: () {
+                                Get.back();
                                 assistantLogic.readAudioFileContent(
                                   assistantLogic.fileList[fileIndex]["fileName"],
                                   assistantLogic.fileList[fileIndex]["fileSize"]
