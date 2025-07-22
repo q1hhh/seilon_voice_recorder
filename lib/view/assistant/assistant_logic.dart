@@ -573,7 +573,7 @@ class AssistantLogic extends GetxController {
         // 只处理文件，不处理文件夹
         if (entity is File) {
           final ext = path.extension(entity.path);
-          if (ext == '.opus') {
+          if (ext == '.opus' || ext == '.wav') {
             await entity.delete();
             print('已删除: ${entity.path}');
           }
@@ -786,7 +786,7 @@ class AssistantLogic extends GetxController {
   // 获取设备信息(回复)
   dealDeviceInfoReplyMessage(BleControlMessage ble) {
     var deviceInfoMessage = DeviceInfoReplyMessage(ble);
-    ViewLogUtil.info("$deviceInfoMessage");
+    ViewLogUtil.info(deviceInfoMessage.toString());
   }
 
   dealOpenWifiMessage(BleControlMessage ble) {

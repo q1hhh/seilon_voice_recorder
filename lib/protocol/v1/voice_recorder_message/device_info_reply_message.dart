@@ -12,7 +12,7 @@ class DeviceInfoReplyMessage extends BleControlMessage {
   int? dischargePower; // 放电功率
   int? recordStatus; // 录音状态(0:未录音, 1:会议录音, 2:通话录音)
   int? wifiStatus; // wifi状态(1:开启 0:关闭)
-  int? emmcUsedCapacity; // emmc已用容量(单位MB)
+  int? emmcUsedCapacity; // emmc剩余容量(单位MB)
   int? emmcCapacityTotal; // emmc总容量(单位MB)
   int? uDiskStatus; // u盘状态(1:开启, 0:关闭)
   int? recordFormat; // 录音格式(0: opus, 1: PCM)
@@ -55,24 +55,24 @@ class DeviceInfoReplyMessage extends BleControlMessage {
   String toString() {
     return 'DeviceInfoReplyMessage{'
         'mac: $mac, '
-        'model: $model, '
-        'version: $version, '
+        '型号: $model, '
+        '版本: $version, '
         'sn: $sn, '
-        'battery: $battery, '
-        'powerBank: $powerBank, '
-        'chargePower: $chargePower, '
-        'dischargePower: $dischargePower, '
-        'recordStatus: $recordStatus, '
-        'wifiStatus: $wifiStatus, '
-        'emmcUsedCapacity: $emmcUsedCapacity, '
-        'emmcCapacityTotal: $emmcCapacityTotal, '
-        'uDiskStatus: $uDiskStatus, '
-        'recordFormat: $recordFormat, '
-        'capacityAlertValue: $capacityAlertValue, '
-        'forgetCloseRecordValue: $forgetCloseRecordValue, '
-        'typeCBattery: $typeCBattery, '
-        'fileEncryptionOption: $fileEncryptionOption, '
-        'recordLight: $recordLight'
+        '电量: $battery, '
+        '充电宝状态: $powerBank, '
+        '充电功率: $chargePower, '
+        '放电功率: $dischargePower, '
+        '录音状态: $recordStatus, '
+        'wifi状态: $wifiStatus, '
+        'emmc剩余容量: $emmcUsedCapacity,'
+        'emmc总容量: $emmcCapacityTotal, '
+        'u盘状态: $uDiskStatus, '
+        '录音格式: $recordFormat, '
+        '容量不足提醒值: $capacityAlertValue, '
+        '忘记关闭录音提醒: $forgetCloseRecordValue, '
+        'Type-C停止输出电量: $typeCBattery, '
+        '文件加密选项: $fileEncryptionOption, '
+        '录音指示灯: $recordLight'
         '}';
   }
 
