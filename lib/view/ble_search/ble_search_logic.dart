@@ -8,6 +8,8 @@ import 'package:Recording_pen/util/log_util.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 
+import '../../util/BleDataUtil.dart';
+
 
 class BleSearchLogic extends GetxController {
 
@@ -37,12 +39,15 @@ class BleSearchLogic extends GetxController {
   void startScan() {
     scanDeviceMap.clear();
     bleFoundBle.startScan(60, (device) async {
-      List<int>? manufacturerData =
-          device.advertisementData.manufacturerData[0x5D];
+      // List<int>? manufacturerData =
+      //     device.advertisementData.manufacturerData[0x5D];
+
+      List<int>? manufacturerData = device.advertisementData.manufacturerData[int.parse("0802", radix: 16)];
+
 
       if (manufacturerData != null) {
-        scanDeviceMap[ByteUtil.uint8ListToHexFull(
-            Uint8List.fromList(manufacturerData))] = device;
+        scanDeviceMap[String.fromCharCodes(manufacturerData.sublist(0, 12))] = device;
+
         update(['scanBle']);
       }
     }, (onError) {

@@ -22,6 +22,7 @@ import 'package:Recording_pen/util/loading_util.dart';
 import 'package:Recording_pen/util/log_util.dart';
 import 'package:Recording_pen/util/my_pcm_util.dart';
 import 'package:Recording_pen/util/view_log_util.dart';
+import 'package:Recording_pen/view/assistant/page/ota_upgrade_process.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:date_format/date_format.dart';
 import 'package:device_info_plus/device_info_plus.dart';
@@ -144,6 +145,8 @@ class AssistantLogic extends GetxController {
   String otaVersion = "";
   // OTA升级文件名称
   String otaFileName = "";
+  // OTA升级进度
+  RxDouble otaProcess = 0.0.obs;
 
   @override
   void onClose() {
@@ -157,7 +160,7 @@ class AssistantLogic extends GetxController {
       { "text": "进入绑定", "press": startBindDevice },
       { "text": "开始握手", "press": startHandShake },
       { "text": "完成绑定", "press": completeBinding },
-      // { "text": "假弹窗", "press": () => showCustomDialog(Get.context!) },
+      // { "text": "假弹窗", "press": () => showOTAUpgradeDialog(Get.context!) },
       { "text": "关机", "press": powerOff },
       { "text": "获取设备信息New", "press": getDeviceInfoV2 },
       { "text": "开启录音(通话录音模式)", "press": () => controlSoundRecording(1, 0) },
@@ -206,9 +209,11 @@ class AssistantLogic extends GetxController {
     var deviceMatches = connectedDevices.where(
             (device) => device.remoteId.str == deviceInfo["deviceId"]
     );
+    LogUtil.log.i(deviceMatches);
 
     if (deviceMatches.isNotEmpty) {
       var targetDevice = deviceMatches.first;
+      LogUtil.log.i(targetDevice);
       BleService().writeData(targetDevice, bytes, targetDevice.mtuNow);
     } else {
       LogUtil.log.e("设备未连接或找不到设备: ${deviceInfo["deviceId"]}");
@@ -538,9 +543,20 @@ class AssistantLogic extends GetxController {
       
       allOTAData = Uint8List.fromList(bytes);
 
-      Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
-      String crc32CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
+      // Uint8List checkSum = Crc16Util.calculateCrc32BigEndian(allOTAData);
+      // 80EF6957
 
+      print(result.files.single.name);
+
+      // 根据文件名切割, 获取CRC
+      var fileNameList = result.files.single.name.split("_");
+      print(fileNameList[4]);
+
+      // CRC检验
+      String crc32CheckSum = fileNameList[4].length < 8 ? ("0" + fileNameList[4]) : fileNameList[4];
+      // Uint8List? checkSum = ByteUtil.hexStringToUint8List(fileName);
+      //
+      // String crc32CheckSum = ByteUtil.uint8ListToHexFull(checkSum!);
       var startOTAMessage = StartOtaMessage(otaType, allOTAData.length, crc32CheckSum, otaVersion);
 
       ViewLogUtil.info("OTA升级模式: ${otaModeController.text}, 文件名称: ${result.files.single.name}, "
@@ -554,10 +570,11 @@ class AssistantLogic extends GetxController {
 
   // 发送OTA升级数据
   sendUpgradePacket() async {
+    // LogUtil.log.i(splitData);
     var bleLockPackage = BleControlPackage.toBleLockPackage(
         UpgradePacketMessage(otaType, currentPackAgeIndex, splitData.first), 0);
     _sendMessage(bleLockPackage);
-
+    // showOTAUpgradeDialog(Get.context!);
     LogUtil.log.i("分包：index=$currentPackAgeIndex, 当前长度=${splitData.first.length}");
   }
 
@@ -938,16 +955,25 @@ class AssistantLogic extends GetxController {
     // 发送升级包成功
     if (sendOTADataReplyMessage.isSuccess()) {
       currentPackAgeIndex = ++currentPackAgeIndex;
+      otaProcess.refresh();
     }
 
     if (sendOTADataReplyMessage.isFail()) {
       ViewLogUtil.error("升级发生错误");
+      Get.back();
+      otaProcess.value = 0;
+      otaProcess.refresh();
+      LoadingUtil.showSuccess("升级失败");
       return;
     }
 
     // OTA升级成功
     if (sendOTADataReplyMessage.isComplete()) {
+      Get.back();
+      otaProcess.value = 0;
+      otaProcess.refresh();
       ViewLogUtil.info("OTA升级成功");
+      LoadingUtil.showSuccess("升级成功");
       return;
     }
 
@@ -1115,5 +1141,28 @@ class AssistantLogic extends GetxController {
     });
   }
 
+  // OTA升级弹窗
+  void showOTAUpgradeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (BuildContext ctx) {
+        return AlertDialog(
+          title: const Text(
+            'OTA升级中...',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 18),
+          ),
+          content: SizedBox(
+            child: Obx(() {
+              otaProcess.value = (splitData.first.length / allOTAData.length);
+              // otaProcess.value = (55.5 / 100);
+              return OtaUpgradeProcess(progress: otaProcess.value,);
+            }),
+          )
+        );
+      },
+    ).then((res) {
 
+    });
+  }
 }

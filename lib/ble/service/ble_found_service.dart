@@ -12,7 +12,11 @@ class BleFoundService {
   }
   BleFoundService._internal();
 
-  static List<Guid> serviceUuids = [Guid("fb349b5f-8000-0080-0010-000000a00000"), Guid("0f417647-9d55-6d98-ca43-cdd098d726e1")];
+  static List<Guid> serviceUuids = [
+    Guid("fb349b5f-8000-0080-0010-000000a00000"),
+    Guid("0f417647-9d55-6d98-ca43-cdd098d726e1"),
+    Guid("01FA")
+  ];
 
   var _scanResultsSubscription;
   var _streamSubscription;

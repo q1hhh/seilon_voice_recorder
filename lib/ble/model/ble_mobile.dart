@@ -16,12 +16,16 @@ var log = logger_package.Logger();
 
 class BleMobile implements BlePlatform {
   var deviceConnectLogic = DeviceConnectLogic();
-  
-  final serviceId = "a000";
-  final handshakeUuid = "a001"; // 设备信息、状态读取
-  final characteristicUuid = "a002"; // 握手认证、设备控制
-  final realTimeAudioUuid = "a003"; // 实时音频接收
 
+  // final serviceId = "a000";
+  final serviceId = "ffe0";// DB02
+  // final handshakeUuid = "a001"; // 设备信息、状态读取
+  // final characteristicUuid = "a002"; // 握手认证、设备控制
+  // final realTimeAudioUuid = "a003"; // 实时音频接收
+
+  final handshakeUuid = "ffe1"; // 设备信息、状态读取
+  final characteristicUuid = "ffe1"; // 握手认证、设备控制
+  final realTimeAudioUuid = "ffe1"; // 实时音频接收
   @override
   Future<void> startScan(List<Guid> serviceUuids, int timeout) async {
     await FlutterBluePlus.startScan(
@@ -57,6 +61,7 @@ class BleMobile implements BlePlatform {
               print("设备${bleDevice.remoteId} 连接成功");
               ViewLogUtil.info("设备 ${bleDevice.remoteId} 连接成功");
               var services = await bleDevice.discoverServices();
+              LogUtil.log.i(services);
               var bleService = services.firstWhere((service) =>
                   service.serviceUuid.str == serviceId);
 
@@ -140,7 +145,7 @@ class BleMobile implements BlePlatform {
 
     try {
       print('Writing data to characteristic: ${characteristic.characteristicUuid.str}');
-      await characteristic.write(data);
+      await characteristic.write(data, withoutResponse: true);
       callback?.call(true);
       print('Data written successfully');
     } catch (e) {
