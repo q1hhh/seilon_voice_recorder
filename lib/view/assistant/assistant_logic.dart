@@ -143,7 +143,13 @@ class AssistantLogic extends GetxController {
   // OTA升级文件版本
   String otaVersion = "";
   // OTA升级文件名称
-  String otaFileName = "";
+  RxString otaFileName = "".obs;
+  // OTA升级进度
+  RxDouble otaProcess = 0.0.obs;
+  // OTA升级固件大小
+  RxInt otaFileSize = 0.obs;
+  // OTA升级已发送数据大小
+  RxInt otaAlready = 0.obs;
 
   @override
   void onClose() {
@@ -382,7 +388,6 @@ class AssistantLogic extends GetxController {
 
   // 删除文件
   removeAudioFile(String? fileName) {
-    if(fileList.isEmpty) return;
     LogUtil.log.i("删除的文件名--->$fileName");
     var bleLockPackage = BleControlPackage.toBleLockPackage(RemoveAudioFile(fileName), 0);
     _sendMessage(bleLockPackage);
@@ -532,7 +537,6 @@ class AssistantLogic extends GetxController {
     FilePickerResult? result = await FilePicker.platform.pickFiles();
     if (result != null && result.files.single.path != null) {
       File file = File(result.files.single.path!);
-      // otaFileName
 
       List<int> bytes = await file.readAsBytes();
       
@@ -542,6 +546,9 @@ class AssistantLogic extends GetxController {
       String crc32CheckSum = ByteUtil.uint8ListToHexFull(checkSum);
 
       var startOTAMessage = StartOtaMessage(otaType, allOTAData.length, crc32CheckSum, otaVersion);
+
+      otaFileSize.value = bytes.length;
+      otaFileSize.refresh();
 
       ViewLogUtil.info("OTA升级模式: ${otaModeController.text}, 文件名称: ${result.files.single.name}, "
           "文件长度: ${bytes.length}, 版本号: $otaVersion, CRC: $crc32CheckSum");
@@ -557,6 +564,9 @@ class AssistantLogic extends GetxController {
     var bleLockPackage = BleControlPackage.toBleLockPackage(
         UpgradePacketMessage(otaType, currentPackAgeIndex, splitData.first), 0);
     _sendMessage(bleLockPackage);
+    
+    otaAlready.value += splitData.length;
+    otaAlready.refresh();
 
     LogUtil.log.i("分包：index=$currentPackAgeIndex, 当前长度=${splitData.first.length}");
   }
@@ -899,6 +909,8 @@ class AssistantLogic extends GetxController {
     }
 
     int maxLength = startOTAReply.getMaxLength();
+    ViewLogUtil.info("每包发送最大: $maxLength");
+
     log.i(maxLength);
     //分包数据清除
     splitData.clear();

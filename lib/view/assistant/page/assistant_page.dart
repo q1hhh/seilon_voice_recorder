@@ -132,6 +132,12 @@ class AssistantPage extends StatelessWidget {
                               "读取文件的大小：(${assistantLogic.fileListContent.length}/${assistantLogic.currentFileSize.value})", style: TextStyle(color: Colors.deepPurpleAccent),
                             ),
                           ),
+                          Text("OTA升级文件: ${assistantLogic.otaFileName.value}"),
+                          SizedBox(
+                            child: Text(
+                              "OTA升级已发送：(${assistantLogic.otaAlready.value}/${assistantLogic.otaFileSize.value})", style: TextStyle(color: Colors.deepPurpleAccent),
+                            ),
+                          ),
                           _buildActionButtons(),
                         ],
                       ),
