@@ -70,6 +70,33 @@ class AssistantPage extends StatelessWidget {
         ),
         child: Column(
           children: [
+            // 降噪强度控制
+            Obx(() => Padding(
+              padding: EdgeInsets.all(10),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '降噪强度: ${assistantLogic.noiseReductionLevel.value.toInt()} dB',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold),
+                  ),
+                  Slider(
+                    value: assistantLogic.noiseReductionLevel.value,
+                    min: -200.0,
+                    max: 0.0,
+                    divisions: 200,
+                    onChangeEnd: (value) async {
+                      assistantLogic.initDnr();
+                    },
+
+                    onChanged: (value) async {
+                      assistantLogic.noiseReductionLevel.value = value;
+                    },
+                  ),
+                ],
+              ),
+            )),
+
             // 日志区域
             Expanded(
               flex: 2,

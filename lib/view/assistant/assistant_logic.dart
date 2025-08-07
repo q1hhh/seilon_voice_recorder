@@ -35,6 +35,7 @@ import 'package:opus_dart/wrappers/opus_decoder.dart';
 import 'package:opus_flutter/opus_flutter.dart' as opus_flutter;
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:seilon_dnr/seilon_dnr.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 import '../../ble/package/control_message.dart';
 import '../../ble/package/hand_shake_message.dart';
@@ -121,6 +122,9 @@ class AssistantLogic extends GetxController {
 
   int expectedOffset = 0; // 当前期望收到的start
 
+  //降噪db
+  RxDouble noiseReductionLevel = (-100.0).obs;
+
   Completer<void>? responseCompleter;
   // 收到的数据总长度
   int dataCount = 0;
@@ -188,7 +192,10 @@ class AssistantLogic extends GetxController {
       { "text": "开始OTA升级", "press": () => sendUpgradePacket() },
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
+      { "text": "选择本地降噪文件", "press": selectAudioFile },
     ]);
+
+    initDnr();
   }
 
   initPcmSound() async {
@@ -198,6 +205,48 @@ class AssistantLogic extends GetxController {
     FlutterPcmSound.start();
   }
 
+  initDnr() async {
+    int result = await DnrPlugin.initialize(16000);
+
+    if (result == DnrPlugin.statusNoError) {
+
+      // List<int> bufferSizes = await DnrPlugin.getBufferSizes();
+
+      await DnrPlugin.setNoiseReductionLevel(noiseReductionLevel.value);
+
+      ViewLogUtil.debug("DNR初始化成功:${noiseReductionLevel.value}");
+    } else {
+
+      ViewLogUtil.debug("DNR初始化失败");
+    }
+  }
+
+  //选择降噪文件进行降噪
+  Future<void> selectAudioFile() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.audio,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        if (result.files.single.name.endsWith(".wav")) {
+
+          var directory = await _getFilePath();
+
+          if (directory == null) return;
+
+          var data = await DnrPlugin.processAudioFile(
+            "${directory.path}/${result.files.single.name}",
+          );
+
+          await writeToExternalStorage(data, "DNR_${result.files.single.name}");
+        }
+      }
+    } catch (e) {
+      ViewLogUtil.error('选择文件失败: $e');
+    }
+  }
 
   // 进行绑定
   startBindDevice() {
@@ -686,26 +735,34 @@ class AssistantLogic extends GetxController {
     return granted;
   }
 
+  Future<Directory?> _getFilePath() async {
+    Directory? directory = await getExternalStorageDirectory();
+    if (directory != null) {
+      String newPath = "";
+      List<String> paths = directory.path.split("/");
+      for (int x = 1; x < paths.length; x++) {
+        String folder = paths[x];
+        if (folder != "Android") {
+          newPath += "/" + folder;
+        } else {
+          break;
+        }
+      }
+      newPath = newPath + "/Download";
+      directory = Directory(newPath);
+
+      if (!await directory.exists()) {
+        await directory.create(recursive: true);
+      }
+    }
+    return directory;
+  }
+
   Future<void> writeToExternalStorage(Uint8List data, String fileName) async {
     if (await requestStoragePermission()) {
-      Directory? directory = await getExternalStorageDirectory();
-      if (directory != null) {
-        String newPath = "";
-        List<String> paths = directory.path.split("/");
-        for (int x = 1; x < paths.length; x++) {
-          String folder = paths[x];
-          if (folder != "Android") {
-            newPath += "/" + folder;
-          } else {
-            break;
-          }
-        }
-        newPath = newPath + "/Download";
-        directory = Directory(newPath);
 
-        if (!await directory.exists()) {
-          await directory.create(recursive: true);
-        }
+      var directory = await _getFilePath();
+      if (directory == null) return;
 
         File file = File('${directory.path}/$fileName');
         await file.writeAsBytes(data);
@@ -728,8 +785,7 @@ class AssistantLogic extends GetxController {
           ),
         );
 
-      }
-    } else {
+      } else {
       print('存储权限被拒绝');
     }
   }
@@ -872,6 +928,19 @@ class AssistantLogic extends GetxController {
     // 如果全部接收完毕
     if ((currentFileSize.value == fileListContent.length) && await requestStoragePermission()) {
       await writeToExternalStorage(Uint8List.fromList(fileListContent.value.cast<int>()), currentFileName.value);
+
+      if (currentFileName.value.endsWith(".wav")) {
+
+        var directory = await _getFilePath();
+
+        if (directory == null) return;
+
+        var data = await DnrPlugin.processAudioFile(
+          "${directory.path}/${currentFileName.value}",
+        );
+
+        await writeToExternalStorage(data, "DNR_${currentFileName.value}");
+      }
     }
   }
 

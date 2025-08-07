@@ -84,6 +84,9 @@ dependencies:
   file_picker: ^10.2.0
   pager: ^0.0.6
 
+  seilon_dnr:
+    path: ../seilon_dnr
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
