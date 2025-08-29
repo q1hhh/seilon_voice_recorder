@@ -9,6 +9,7 @@ import '../../controllers/deviceConnect.dart';
 import '../../util/ByteUtil.dart';
 import '../../util/log_util.dart';
 import '../../util/view_log_util.dart';
+import '../ble_callback_dispatcher.dart';
 import '../blue_tooth_message_handler.dart';
 import 'ble_platform_interface.dart';
 
@@ -53,7 +54,8 @@ class BleMobile implements BlePlatform {
           switch (state) {
             case BluetoothConnectionState.connected:
               // 只有安卓需要设置mtu
-              if (Platform.isAndroid) bleDevice.requestMtu(512);
+              await bleDevice.requestConnectionPriority(connectionPriorityRequest: ConnectionPriority.high);
+              if (Platform.isAndroid) bleDevice.requestMtu(517);
               print("设备${bleDevice.remoteId} 连接成功");
               ViewLogUtil.info("设备 ${bleDevice.remoteId} 连接成功");
               var services = await bleDevice.discoverServices();
@@ -152,38 +154,46 @@ class BleMobile implements BlePlatform {
   @override
   Future<void> notify(String deviceId, dynamic characteristic) async {
     BluetoothCharacteristic bleCharacteristic = characteristic as BluetoothCharacteristic;
-    bleCharacteristic.setNotifyValue(false);
-    deviceConnectLogic.notifySubscription[deviceId] = bleCharacteristic.onValueReceived.listen((value) {
-      var data = ByteUtil.uint8ListToHexFull(Uint8List.fromList(value));
-      ViewLogUtil.info("onValueReceived=====>$deviceId $data");
-      BlueToothMessageHandler().handleMessage(Uint8List.fromList(value), deviceId);
-    });
-    bleCharacteristic.setNotifyValue(true);
+    await bleCharacteristic.setNotifyValue(false);
+    LogUtil.log.i('notify');
+    deviceConnectLogic.notifyControlSubscription[deviceId] =
+        bleCharacteristic.onValueReceived.listen((value) {
+          final bytes = Uint8List.fromList(value);// 复制一份
+          // 关键：只入队，立刻返回（不再在回调里跑重活）
+          BleCallbackDispatcher.instance.enqueue(deviceId, bytes);
+        });
+
+    await bleCharacteristic.setNotifyValue(true);
   }
 
   @override
   Future<void> notifyHandShake(String deviceId, dynamic characteristic) async {
-    BluetoothCharacteristic bleCharacteristic = characteristic as BluetoothCharacteristic;
-    bleCharacteristic.setNotifyValue(false);
-    LogUtil.log.i('notifyHandShake');
-    deviceConnectLogic.notifyControlSubscription[deviceId] = bleCharacteristic.onValueReceived.listen((value) {
-      var data = ByteUtil.uint8ListToHexFull(Uint8List.fromList(value));
-      ViewLogUtil.info("notifyHandShake=====>$deviceId $data");
-      BlueToothMessageHandler().handleMessage(Uint8List.fromList(value), deviceId);
-    });
-    bleCharacteristic.setNotifyValue(true);
+    // BluetoothCharacteristic bleCharacteristic = characteristic as BluetoothCharacteristic;
+    // await bleCharacteristic.setNotifyValue(false);
+    // LogUtil.log.i('notifyHandShake');
+    // deviceConnectLogic.notifyControlSubscription[deviceId] =
+    //     bleCharacteristic.onValueReceived.listen((value) {
+    //       final bytes = Uint8List.fromList(value);// 复制一份
+    //
+    //       // 关键：只入队，立刻返回（不再在回调里跑重活）
+    //       BleCallbackDispatcher.instance.enqueue(deviceId, bytes);
+    //     });
+    //
+    // await bleCharacteristic.setNotifyValue(true);
   }
 
   @override
   Future<void> notifyRealTimeAudio(String deviceId, dynamic characteristic) async {
     BluetoothCharacteristic bleCharacteristic = characteristic as BluetoothCharacteristic;
-    bleCharacteristic.setNotifyValue(false);
-    deviceConnectLogic.notifyRealTimeAudioSubscription[deviceId] = bleCharacteristic.onValueReceived.listen((value) {
-      var data = ByteUtil.uint8ListToHexFull(Uint8List.fromList(value));
-      ViewLogUtil.info("notifyRealTimeAudio=====>$deviceId $data");
-      BlueToothMessageHandler().handleMessage(Uint8List.fromList(value), deviceId);
-    });
-    bleCharacteristic.setNotifyValue(true);
+    await bleCharacteristic.setNotifyValue(false);
+    LogUtil.log.i('notifyRealTimeAudio');
+    deviceConnectLogic.notifyRealTimeAudioSubscription[deviceId] =
+        bleCharacteristic.onValueReceived.listen((value) {
+          // 关键：只入队，立刻返回（不再在回调里跑重活）
+          BlueToothMessageHandler().realAudioMessage(Uint8List.fromList(value), deviceId);
+        });
+
+    await bleCharacteristic.setNotifyValue(true);
   }
 
   @override

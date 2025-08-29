@@ -3,7 +3,7 @@ description: "Recording Pen"
 
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.0
+version: 1.0.3
 
 environment:
   sdk: '>=3.4.1 <4.0.0'
@@ -78,14 +78,18 @@ dependencies:
 
   opus_flutter: ^3.0.3
   opus_dart: ^3.0.1
+  flutter_sound: ^9.28.0
 
-  flutter_pcm_sound: ^3.1.7
+  flutter_pcm_sound: ^3.2.4
   app_settings: ^6.1.1
   file_picker: ^10.2.0
   pager: ^0.0.6
 
   seilon_dnr:
     path: ../seilon_dnr
+
+  dfu_realtek:
+    path: ../dfu_realtek
 
 dev_dependencies:
   flutter_test:
@@ -108,7 +112,6 @@ flutter_launcher_icons:
 flutter:
   assets:
     - images/
-    - bin/
   #    - images/Image.svg
   #    - images/Image.png
 

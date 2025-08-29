@@ -18,9 +18,6 @@ class LockControlAES {
     final encrypter = Encrypter(AES(key, mode: AESMode.ecb, padding: null));
 
     final decrypted = encrypter.decryptBytes(Encrypted(data));
-
-    print('aes解密:${decrypted}');
-
     return Uint8List.fromList(decrypted);
   }
 

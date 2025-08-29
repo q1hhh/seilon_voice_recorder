@@ -18,14 +18,14 @@ class RealTimeStreamingMessage extends BleControlMessage {
 
     if (totalChunks != null && totalChunks != 0) {
       double dataLength = (opusBytes.length / totalChunks!);
-      List<int> firstData = [00, 00, 00, dataLength.toInt()];
+      // List<int> firstData = [00, 00, 00, dataLength.toInt()];
       int index = 0;
 
       for (int i = 0; i < totalChunks!; i++) {
         List<int> subData = opusBytes.sublist(index, index + dataLength.toInt());
         index = index + dataLength.toInt();
 
-        opusData.add([...firstData, ...subData]);
+        opusData.add([...subData]);
       }
     }
 

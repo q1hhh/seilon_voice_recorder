@@ -207,12 +207,12 @@ class BleControlPackage {
       var decryptData = LockControlAES.decryptAES(messageData, key);
       var data = Uint8List(decryptData.length - dataCheckLength);
       data.setRange(0, data.length, decryptData);
-      print('data:${ByteUtil.uint8ListToHexFull(data)}');
+      // print('data:${ByteUtil.uint8ListToHexFull(data)}');
       BleControlMessage message = BleControlMessage.parse(data);
 
       if (message != null) {
-        print(message.check);
-        print(dataCheck);
+        // print(message.check);
+        // print(dataCheck);
         if (message.check == dataCheck) {
           message.pid = pid;
           message.cmdCategory = cmdCategory;

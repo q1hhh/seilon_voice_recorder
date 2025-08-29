@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'package:Recording_pen/protocol/v1/constants/LockControlCmd.dart';
 import 'package:Recording_pen/util/log_util.dart';
 import 'package:Recording_pen/view/assistant/assistant_logic.dart';
+import 'package:date_format/date_format.dart';
 import 'package:get/get.dart';
 import 'package:logger/logger.dart' as logger_package;
 import '../constant/my_app_common.dart';
@@ -10,6 +11,7 @@ import '../protocol/BleControlMessage.dart';
 import '../protocol/BleControlPackage.dart';
 import '../protocol/v1/voice_recorder_message/real_time_streaming_message.dart';
 import '../util/ByteUtil.dart';
+import '../util/audio/notify_rate_calculator.dart';
 
 var log = logger_package.Logger();
 class BlueToothMessageHandler {
@@ -24,9 +26,12 @@ class BlueToothMessageHandler {
 
   static Map<String, Queue<Uint8List>> queueDataMap = {};
 
-  var assistantLogic;
   // 组包
   static List<int> packageList = [];
+
+  final NotifyRateCalculator rateCalculator = NotifyRateCalculator();
+
+  late final AssistantLogic _cachedLogic = Get.find<AssistantLogic>();
 
   void handleConnectState(String deviceMac, bool state) {
 
@@ -115,7 +120,20 @@ class BlueToothMessageHandler {
   //   }
   // }
 
+  void realAudioMessage(Uint8List bleMsg, String deviceUuid) {
+    if (_cachedLogic.isGetRecord) {
+      handleMessage(bleMsg, deviceUuid);
+    } else {
+      // 直接调用，减少中间层
+      NotifyRateCalculator.instance.onNotifyReceived(bleMsg);
+      _cachedLogic.dealOpusMsg(bleMsg); // 直接调用最底层函数
+    }
+  }
+
   void handleMessage(Uint8List bleMsg, String deviceUuid) async {
+    // 统计notify速率
+    Future(() => NotifyRateCalculator.instance.onNotifyReceived(bleMsg));
+
     // 1. 初始化队列
     queueDataMap.putIfAbsent(deviceUuid, () => Queue<Uint8List>());
     queueDataMap[deviceUuid]!.add(bleMsg);
@@ -197,6 +215,7 @@ class BlueToothMessageHandler {
     var parse = BleControlPackage.parse(data);
     if (parse != null) {
       var parseMessage = parse.parseMessage(MyAppCommon.DEVICE_DEFAULT_KEY);
+      // var parseMessage = parse.parseNotKeyMessage();
       if (parseMessage) {
         _receiveMessage(parse.message, parse.deviceId);
       }
@@ -232,10 +251,9 @@ class BlueToothMessageHandler {
       case LockControlCmd.CATEGORY_RECORDER:
         switch(ble.cmd) {
           case LockControlCmd.CMD_RECORDER_DEVICE_INFO:
-            var realTimeStreamingMessage = RealTimeStreamingMessage(ble);
             if (Get.isRegistered<AssistantLogic>()) {
               var find = Get.find<AssistantLogic>();
-              find.dealDeviceInfoReplyMessage(realTimeStreamingMessage);
+              find.dealDeviceInfoReplyMessage(ble);
             }
             break;
 

@@ -25,6 +25,7 @@ import 'package:Recording_pen/util/view_log_util.dart';
 import 'package:app_settings/app_settings.dart';
 import 'package:date_format/date_format.dart';
 import 'package:device_info_plus/device_info_plus.dart';
+import 'package:dfu_realtek/dfu_realtek.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 import 'package:get/get.dart';
@@ -37,12 +38,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:seilon_dnr/seilon_dnr.dart';
 import 'package:wifi_iot/wifi_iot.dart';
-import '../../ble/package/control_message.dart';
 import '../../ble/package/hand_shake_message.dart';
-import 'package:uuid/uuid.dart';
 
 import '../../controllers/deviceInfo_control.dart';
-import '../../protocol/v1/constants/LockControlCmd.dart';
 import '../../protocol/v1/system_setting_message/upgrade_packet_message.dart';
 import '../../protocol/v1/voice_recorder_message/device_info_reply_message.dart';
 import '../../protocol/v1/voice_recorder_message/power_control_message.dart';
@@ -56,7 +54,6 @@ import '../../protocol/v1/voice_recorder_message/real_time_streaming_message.dar
 import '../../protocol/v1/voice_recorder_message/tcp_server_message.dart';
 import '../../protocol/v1/voice_recorder_message/tcp_server_parse_message.dart';
 import '../../protocol/v1/voice_recorder_message/wifi_open_message.dart';
-import '../../common/shared/my_configurator.dart';
 import '../../constant/my_app_common.dart';
 import '../../protocol/BleControlPackage.dart';
 import '../../protocol/v1/network_category_message/bind_device_message.dart';
@@ -65,14 +62,32 @@ import '../../protocol/v1/network_category_message/hand_shake_message.dart';
 import '../../protocol/v1/voice_recorder_message/control_sound_record_message.dart';
 import '../../protocol/v1/voice_recorder_message/get_device_info_message.dart';
 import '../../theme/app_colors.dart';
+import '../../util/audio/data_rate_formatter.dart';
+import '../../util/audio/notify_rate_calculator.dart';
 import '../../util/crc_16_util.dart';
 import '../../util/tcp_util.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
 
+import '../../wiget/simple_opus_stream_player.dart';
+import '../../wiget/upgrade_dialog.dart';
 import '../file_list/page/file_list_page.dart';
 import '../pagination.dart';
+
+class GlobalOpusDecoder {
+  static late SimpleOpusDecoder _decoder;
+  static bool _initialized = false;
+
+  static void init() {
+    if (!_initialized) {
+      _decoder = SimpleOpusDecoder(sampleRate: 16000, channels: 2);
+      _initialized = true;
+    }
+  }
+
+  static Int16List decode(Uint8List data) => _decoder.decode(input: data);
+}
 
 class AssistantLogic extends GetxController {
   var homeLogic = Get.find<HomeControl>();
@@ -155,14 +170,24 @@ class AssistantLogic extends GetxController {
   // OTA升级已发送数据大小
   RxInt otaAlready = 0.obs;
 
+  // 速率
+  RxString dataRate = "".obs;
+
+  final dfu = DfuRealtek();
+
+  bool isGetRecord = false;
+
   @override
   void onClose() {
     disconnect();
+    // opusStreamPlayer.dispose();
     super.onClose();
   }
 
   @override
   onInit() {
+
+    ViewLogUtil.clear();
     actionBtnList.addAll([
       { "text": "进入绑定", "press": startBindDevice },
       { "text": "开始握手", "press": startHandShake },
@@ -193,22 +218,20 @@ class AssistantLogic extends GetxController {
       { "text": "清空本地存储的文件", "press": () => clearOpusFiles() },
       { "text": "清空日志", "press": clearLog },
       { "text": "选择本地降噪文件", "press": selectAudioFile },
+      { "text": "升级蓝牙模块", "press": realtekOta},
     ]);
-
+    initOpusRealPlay();
     initDnr();
+    GlobalOpusDecoder.init();
   }
 
-  initPcmSound() async {
-    // 1. 初始化
-    await FlutterPcmSound.setup(sampleRate: 16000, channelCount: 1);
-    FlutterPcmSound.setFeedThreshold(1024);
-    FlutterPcmSound.start();
-  }
 
+
+  // 初始化降噪
   initDnr() async {
     int result = await DnrPlugin.initialize(16000);
 
-    if (result == DnrPlugin.statusNoError) {
+    if (result == 0) {
 
       // List<int> bufferSizes = await DnrPlugin.getBufferSizes();
 
@@ -219,6 +242,43 @@ class AssistantLogic extends GetxController {
 
       ViewLogUtil.debug("DNR初始化失败");
     }
+  }
+
+  Future<void> initPcmSound() async {
+    await FlutterPcmSound.init(sampleRate: 16000, channels: 2);
+
+    // 当内部剩余 frames < threshold 时会回调要数据（单位=audio frames）
+    // await FlutterPcmSound.setFeedThreshold(640 * 10);
+
+    // FlutterPcmSound.setFeedCallback((int remainingFrames) async {
+    //   // LogUtil.log.i("back:$remainingFrames");
+    //
+    //   // await FlutterPcmSound.feed(pcmQueue.removeFirst());
+    // });
+
+    FlutterPcmSound.start();
+  }
+
+  initOpusRealPlay() async {
+    NotifyRateCalculator().start(
+      enableAutoCalculation: true,
+      autoCalculationInterval: const Duration(seconds: 1), // 每1秒自动计算
+
+      onStatsUpdated: (stats) {
+        // 自动接收最新统计数据
+        dataRate.value = DataRateFormatter.formatDataRate(stats.dataRatePerSecond);
+      },
+
+      onPerformanceAlert: (alert) {
+        // 自动接收性能警告
+      },
+    );
+
+    // opusStreamPlayer = DebugAudioPlayer(
+    //   sampleRate: 16000,  // 16kHz
+    //   channels: 2,        // 单声道
+    // );
+    // await opusStreamPlayer.initialize();
   }
 
   //选择降噪文件进行降噪
@@ -240,7 +300,72 @@ class AssistantLogic extends GetxController {
             "${directory.path}/${result.files.single.name}",
           );
 
-          await writeToExternalStorage(data, "DNR_${result.files.single.name}");
+          await writeToExternalStorage(data!, "DNR_${result.files.single.name}");
+        }
+      }
+    } catch (e) {
+      ViewLogUtil.error('选择文件失败: $e');
+    }
+  }
+
+  Future<void> realtekOta() async {
+    try {
+      FilePickerResult? result = await FilePicker.platform.pickFiles(
+        type: FileType.any,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        if (result.files.single.name.endsWith(".bin")) {
+
+          var directory = await _getFilePath();
+
+          if (directory == null) return;
+
+          RxDouble _currentProgress = (0.0).obs;
+          RxString _currentStatus = "准备升级...".obs;
+          RxString _currentDetail = "".obs;
+          RxBool _isComplete = false.obs;
+          RxBool _canClose = false.obs;
+
+          Get.dialog(
+              StatefulBuilder(
+                builder: (context, setDialogState) {
+                  return Obx(() => UpgradeDialog(
+                    progress: _currentProgress.value,
+                    statusText: _currentStatus.value,
+                    detailText: _currentDetail.value,
+                    isComplete: _isComplete.value,
+                    canClose: _canClose.value,
+                    primaryColor: Colors.cyan,
+                    onClose: () {
+                      Navigator.of(context).pop();
+                    },
+                  ));
+                },
+              )
+          );
+
+          await dfu.initialize();
+
+          dfu.startOta(address: deviceInfo['deviceId'],
+              filePath: "${directory.path}/${result.files.single.name}");
+
+          dfu.progressStream.listen((progress) {
+            _currentProgress.value = progress.toDouble();
+
+          });
+
+          dfu.statusStream.listen((state) {
+            _currentStatus.value = state.name;
+
+            if (state == DfuStatus.success) {
+              _isComplete.value = true;
+              _canClose.value = true;
+            }
+
+          });
+
         }
       }
     } catch (e) {
@@ -314,10 +439,21 @@ class AssistantLogic extends GetxController {
 
     if (control == 1) {
       allOpusData.clear();
+      opusData.clear();
+      // opusStreamPlayer.startStreaming();
+      isFirst = true;
+      pushing = false;
+
       initPcmSound();
+
+      _isInitialized = true;
     }
     if (control == 0) {
       lastSentCommandId = turnOffRecording;
+      // opusStreamPlayer.stopStreaming();
+
+      // pcmQueue.clear();
+
       getControlFeedBack(null);
     }
 
@@ -429,6 +565,8 @@ class AssistantLogic extends GetxController {
 
     currentFileName.value = readFileName;
     currentFileSize.value = readFileSize;
+
+    isGetRecord = true;
 
     var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(currentFileName.value, 0, maxFileContentLength.value), 0);
     _sendMessage(bleLockPackage);
@@ -669,6 +807,15 @@ class AssistantLogic extends GetxController {
         BleService().writeData(targetDevice, bytes, targetDevice.mtuNow);
       } else {
         LogUtil.log.e("设备未连接或找不到设备: ${deviceInfo["deviceId"]}");
+
+        Get.showSnackbar(
+          const GetSnackBar(
+            message: "设备未连接或找不到设备",
+            backgroundColor: Colors.redAccent,
+            duration: Duration(seconds: 2),
+          ),
+        );
+
       }
     }
     // TCP模式
@@ -693,10 +840,15 @@ class AssistantLogic extends GetxController {
 
     if (lastSentCommandId == turnOffRecording) {
       lastSentCommandId = -1;
-      FlutterPcmSound.release();
+      FlutterPcmSound.stop();
 
-      await writeToExternalStorage(Uint8List.fromList(allOpusData), '${DateFormat('yyyy-MM-dd_HH_mm_ss').format(DateTime.now())}.opus');
-      await saveWav('${DateFormat('yyyy-MM-dd_HH_mm_ss').format(DateTime.now())}.wav');
+      if (allOpusData.isNotEmpty) {
+
+        var list = allOpusData.toList().map((data) => [0, 0, 0, data.length, ...data]).toList();
+
+        await writeToExternalStorage(Uint8List.fromList(list.expand((inner) => inner).toList()), '${DateFormat('yyyy-MM-dd_HH_mm_ss').format(DateTime.now())}.opus');
+        await saveWav('${DateFormat('yyyy-MM-dd_HH_mm_ss').format(DateTime.now())}.wav');
+      }
     }
   }
 
@@ -835,19 +987,117 @@ class AssistantLogic extends GetxController {
     }
   }
 
-  List<int> allOpusData = [];
+  Queue<List<int>> allOpusData = Queue();
 
   List<int> opusData = [];
 
+  bool _isInitialized = false;
+
   // opus 裸流数据
   void dealAudioMessage(RealTimeStreamingMessage realTimeStreamingMessage) {
+    if (!_isInitialized) {
+      print('音频处理器未初始化');
+      return;
+    }
 
+    for (var msg in realTimeStreamingMessage.opusData) {
+      // 直接发送给优化的播放器处理
+      // opusStreamPlayer.onBluetoothPcmData(Uint8List.fromList(msg));
 
-    for (final msg in realTimeStreamingMessage.opusData) {
-      allOpusData.addAll(msg); // 累积全量数据（如果你需要保存）
-      opusData.addAll(msg);
+      Future(() => testDirectPlaySimple(Uint8List.fromList(msg)));
+
+      // 如果需要保存全量数据
+      // allOpusData.addAll(msg);
+      // opusData.addAll(msg);
     }
   }
+
+  void dealOpusMsg(Uint8List data) {
+    FlutterPcmSound.feed(GlobalOpusDecoder.decode(data));
+    allOpusData.add(data);
+  }
+
+  // Queue<PcmArrayInt16> pcmQueue = Queue();
+
+  bool isFirst = true;
+  bool pushing = false;
+
+
+  Future<void> testDirectPlaySimple(Uint8List opusData) async {
+    try {
+
+      MyPcmUtil.decodeOpusToPcm(opusData).then((data) {
+        FlutterPcmSound.feed(data);
+      });
+      // final pcmData = await MyPcmUtil.decodeOpusToPcm(opusData);
+      // if (pcmData.isEmpty) return;
+      //
+      // FlutterPcmSound.feed(pcmData);
+
+    } catch (e) {
+      print('简化播放失败: $e');
+    }
+  }
+
+  /**
+  Future<void> testDirectPlaySimple(Uint8List opusData) async {
+    try {
+      final pcmData = await MyPcmUtil.decodeOpusToPcm(opusData);
+      if (pcmData.isEmpty) return;
+
+      List<int> processedPcm = [];
+
+      // 如果是640样本，分割成256样本的帧处理
+      if (pcmData.length == 640) {
+        // 处理前两个256样本帧
+        for (int i = 0; i < 2; i++) {
+          List<int> frame256 = pcmData.sublist(i * 256, (i + 1) * 256);
+
+          PcmFrameResult? result = await DnrPlugin.processPcmFrame(frame256);
+          if (result != null && result.isSuccess) {
+            processedPcm.addAll(result.processedPcm);
+          } else {
+            LogUtil.log.e("第${i+1}个256帧处理失败: ${result?.statusMessage ?? 'Unknown error'}");
+            return;
+          }
+        }
+
+        // 处理剩余的128样本
+        List<int> lastFrame = List.from(pcmData.sublist(512)); // 最后128样本
+        while (lastFrame.length < 256) {
+          lastFrame.add(0); // 填充到256
+        }
+
+        PcmFrameResult? lastResult = await DnrPlugin.processPcmFrame(lastFrame);
+        if (lastResult != null && lastResult.isSuccess) {
+          processedPcm.addAll(lastResult.processedPcm.sublist(0, 128)); // 只取前128个
+        } else {
+          LogUtil.log.e("最后一帧处理失败: ${lastResult?.statusMessage ?? 'Unknown error'}");
+          return;
+        }
+
+      } else if (pcmData.length == 256) {
+        // 标准256样本帧
+        PcmFrameResult? result = await DnrPlugin.processPcmFrame(pcmData);
+        if (result != null && result.isSuccess) {
+          processedPcm = result.processedPcm;
+        } else {
+          LogUtil.log.e("单帧处理失败: ${result?.statusMessage ?? 'Unknown error'}");
+          return;
+        }
+
+      } else {
+        LogUtil.log.e("不支持的PCM帧长度: ${pcmData.length}");
+        return;
+      }
+
+      // 播放处理后的音频
+      FlutterPcmSound.feed(Int16List.fromList(processedPcm));
+
+    } catch (e) {
+      print('简化播放失败: $e');
+    }
+  }*/
 
   // 获取设备信息(回复)
   dealDeviceInfoReplyMessage(BleControlMessage ble) {
@@ -884,7 +1134,7 @@ class AssistantLogic extends GetxController {
     // 总共多少页
     fileTotalCount.value = temp == 0 ? 0 : temp.ceil();
 
-    ViewLogUtil.info("读取文件数量--->${audioListCountMessage}");
+    ViewLogUtil.info("读取文件数量--->$audioListCountMessage");
     ViewLogUtil.info("文件页数--->${fileTotalCount.value}");
   }
 
@@ -927,6 +1177,9 @@ class AssistantLogic extends GetxController {
     // responseCompleter?.complete();
     // 如果全部接收完毕
     if ((currentFileSize.value == fileListContent.length) && await requestStoragePermission()) {
+
+      isGetRecord = false;
+
       await writeToExternalStorage(Uint8List.fromList(fileListContent.value.cast<int>()), currentFileName.value);
 
       if (currentFileName.value.endsWith(".wav")) {
@@ -939,7 +1192,7 @@ class AssistantLogic extends GetxController {
           "${directory.path}/${currentFileName.value}",
         );
 
-        await writeToExternalStorage(data, "DNR_${currentFileName.value}");
+        await writeToExternalStorage(data!, "DNR_${currentFileName.value}");
       }
     }
   }
@@ -947,7 +1200,6 @@ class AssistantLogic extends GetxController {
   // 删除文件回复
   dealRemoveFileReply(BleControlMessage ble) {
     if(ble.isSuccess()) {
-      Get.back();
       LoadingUtil.showSuccess("删除成功");
     }
     else {
@@ -1014,7 +1266,7 @@ class AssistantLogic extends GetxController {
   // 发送OTA升级数据(回复)
   dealSendDataOTAReply(BleControlMessage ble) async {
     var sendOTADataReplyMessage = UpgradePackageReplyMessage(ble);
-    LogUtil.log.i("发送升级数据包的回复${sendOTADataReplyMessage}");
+    LogUtil.log.i("发送升级数据包的回复$sendOTADataReplyMessage");
 
     // 发送升级包成功
     if (sendOTADataReplyMessage.isSuccess()) {
@@ -1043,40 +1295,11 @@ class AssistantLogic extends GetxController {
 
   }
 
-  Future<Uint8List> decodeOpusToPCM(Uint8List opusData) async {
-    const int sampleRate = 16000;
-    const int channels = 1;
-
-    // 初始化解码器
-    final decoder = SimpleOpusDecoder(
-      sampleRate: sampleRate,
-      channels: channels,
-    );
-    final pcm = decoder.decode(input: opusData); // Uint8List opusData 是一帧
-
-    // 转为 Uint8List（写文件用）
-    final Uint8List pcmBytes = pcm.buffer.asUint8List(
-      pcm.offsetInBytes,
-      pcm.lengthInBytes
-    );
-
-    decoder.destroy();
-    return pcmBytes;
-  }
-
-
   Future<void> saveWav(String fileName) async {
-    LogUtil.log.i("录音数据--->$allOpusData");
-    Uint8List pcmData = await MyPcmUtil.decodeAllOpus(Uint8List.fromList(allOpusData));
+    // LogUtil.log.i("录音数据--->$allOpusData");
+    Uint8List pcmData = await MyPcmUtil.decodeAllOpus(allOpusData.toList());
 
     var channels = 2;
-    // 双声道
-    // if(allOpusData[3] > 40) {
-    //   channels = 2;
-    // }
-
-    // final file = File('/storage/emulated/0/Download/output.pcm');
-    // await file.writeAsBytes(pcmData);
 
     Uint8List wavData = pcmToWav(pcmData, channels: channels);
 

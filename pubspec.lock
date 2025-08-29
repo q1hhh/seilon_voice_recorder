@@ -286,6 +286,13 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "7.0.2"
+  dfu_realtek:
+    dependency: "direct main"
+    description:
+      path: "../dfu_realtek"
+      relative: true
+    source: path
+    version: "0.0.1"
   dropdown_button2:
     dependency: "direct main"
     description:
@@ -460,10 +467,10 @@ packages:
     dependency: "direct main"
     description:
       name: flutter_pcm_sound
-      sha256: c8af09d7c39d63b0c2c20a406da5d0cb92690b4783b24fdcafecdc681bb65005
+      sha256: "854bec60d92db631d8ce0d17cc1c0887819fc366af2ed324a11a85fab7d2aae8"
       url: "https://pub.flutter-io.cn"
     source: hosted
-    version: "3.1.7"
+    version: "3.2.4"
   flutter_plugin_android_lifecycle:
     dependency: transitive
     description:
@@ -472,6 +479,30 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "2.0.28"
+  flutter_sound:
+    dependency: "direct main"
+    description:
+      name: flutter_sound
+      sha256: ef89477f6e8ce2fa395158ebc4a8b11982e3ada440b4021c06fd97a4e771554b
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "9.28.0"
+  flutter_sound_platform_interface:
+    dependency: transitive
+    description:
+      name: flutter_sound_platform_interface
+      sha256: "3394d7e664a09796818014ff85a81db0dec397f4c286cbe52f8783886fa5a497"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "9.28.0"
+  flutter_sound_web:
+    dependency: transitive
+    description:
+      name: flutter_sound_web
+      sha256: "4e10c94a8574bd93bb8668af59bf76f5312a890bccd3778d73168a7133217dc5"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "9.28.0"
   flutter_spinkit:
     dependency: transitive
     description:
@@ -1074,6 +1105,13 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "0.2.0"
+  seilon_dnr:
+    dependency: "direct main"
+    description:
+      path: "../seilon_dnr"
+      relative: true
+    source: path
+    version: "0.0.1"
   shared_preferences:
     dependency: "direct main"
     description:
@@ -1223,6 +1261,14 @@ packages:
       url: "https://pub.flutter-io.cn"
     source: hosted
     version: "1.4.1"
+  synchronized:
+    dependency: transitive
+    description:
+      name: synchronized
+      sha256: "0669c70faae6270521ee4f05bffd2919892d42d1276e6c495be80174b6bc0ef6"
+      url: "https://pub.flutter-io.cn"
+    source: hosted
+    version: "3.3.1"
   term_glyph:
     dependency: transitive
     description:

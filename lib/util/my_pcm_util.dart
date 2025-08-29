@@ -1,41 +1,105 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:Recording_pen/util/ByteUtil.dart';
+import 'package:Recording_pen/util/log_util.dart';
 import 'package:opus_dart/opus_dart.dart';
+import 'package:opus_dart/wrappers/opus_multistream.dart';
 
 class MyPcmUtil {
 
-  static Future<Uint8List> decodeAllOpus(Uint8List fullData) async {
+  // static Future<Uint8List> decodeAllOpus(Uint8List fullData) async {
+  //   const sampleRate = 16000;
+  //   const channels = 2;
+  //   final decoder = SimpleOpusDecoder(sampleRate: sampleRate, channels: channels);
+  //
+  //   final pcmBuffer = BytesBuilder();
+  //   final frameHeader = Uint8List.fromList([0x00, 0x00, 0x00, 0x50]);
+  //
+  //   int offset = 0;
+  //   while (offset < fullData.length) {
+  //     int start = _indexOfBytes(fullData, frameHeader, offset);
+  //     if (start == -1) break;
+  //
+  //     int next = _indexOfBytes(fullData, frameHeader, start + 4);
+  //     int end = next == -1 ? fullData.length : next;
+  //     Uint8List frame = fullData.sublist(start + 4, end);
+  //
+  //     try {
+  //       final pcm = decoder.decode(input: frame);
+  //       if (pcm.isNotEmpty) {
+  //         pcmBuffer.add(Uint8List.view(pcm.buffer, pcm.offsetInBytes, pcm.length * 2));
+  //       }
+  //     } catch (e) {
+  //       print('❌ 解码失败: $e');
+  //     }
+  //
+  //     offset = end;
+  //   }
+  //
+  //   decoder.destroy();
+  //   return pcmBuffer.toBytes();
+  // }
+
+  static Future<Uint8List> decodeAllOpus(List<List<int>> fullData) async {
     const sampleRate = 16000;
     const channels = 2;
     final decoder = SimpleOpusDecoder(sampleRate: sampleRate, channels: channels);
 
     final pcmBuffer = BytesBuilder();
-    final frameHeader = Uint8List.fromList([0x00, 0x00, 0x00, 0x50]);
+    // final frameHeader = Uint8List.fromList([0x00, 0x00, 0x00, 0x50]);
 
-    int offset = 0;
-    while (offset < fullData.length) {
-      int start = _indexOfBytes(fullData, frameHeader, offset);
-      if (start == -1) break;
-
-      int next = _indexOfBytes(fullData, frameHeader, start + 4);
-      int end = next == -1 ? fullData.length : next;
-      Uint8List frame = fullData.sublist(start + 4, end);
-
+    for (var frame in fullData) {
       try {
-        final pcm = decoder.decode(input: frame);
+        final pcm = decoder.decode(input: Uint8List.fromList(frame));
         if (pcm.isNotEmpty) {
           pcmBuffer.add(Uint8List.view(pcm.buffer, pcm.offsetInBytes, pcm.length * 2));
         }
       } catch (e) {
         print('❌ 解码失败: $e');
       }
-
-      offset = end;
     }
+
+    // int offset = 0;
+    // while (offset < fullData.length) {
+    //   int start = _indexOfBytes(fullData, frameHeader, offset);
+    //   if (start == -1) break;
+    //
+    //   int next = _indexOfBytes(fullData, frameHeader, start + 4);
+    //   int end = next == -1 ? fullData.length : next;
+    //   Uint8List frame = fullData.sublist(start + 4, end);
+    //
+    //   try {
+    //     final pcm = decoder.decode(input: frame);
+    //     if (pcm.isNotEmpty) {
+    //       pcmBuffer.add(Uint8List.view(pcm.buffer, pcm.offsetInBytes, pcm.length * 2));
+    //     }
+    //   } catch (e) {
+    //     print('❌ 解码失败: $e');
+    //   }
+    //
+    //   offset = end;
+    // }
 
     decoder.destroy();
     return pcmBuffer.toBytes();
+  }
+
+  static Future<Int16List> decodeOpusToPcm(Uint8List opusData) async {
+    const sampleRate = 16000;
+    const channels = 2;
+    final decoder = SimpleOpusDecoder(sampleRate: sampleRate, channels: channels);
+
+    try {
+      final pcm = decoder.decode(input: opusData);
+      // pcm.length = 640 samples => 1280 bytes stereo
+      return pcm;
+    } catch (e) {
+      print('❌ 解码失败: $e');
+      return Int16List(0);
+    } finally {
+      decoder.destroy();
+    }
   }
 
 
