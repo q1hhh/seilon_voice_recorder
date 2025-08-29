@@ -69,8 +69,6 @@ import '../../util/tcp_util.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter/services.dart';
 import 'package:file_picker/file_picker.dart';
-
-import '../../wiget/simple_opus_stream_player.dart';
 import '../../wiget/upgrade_dialog.dart';
 import '../file_list/page/file_list_page.dart';
 import '../pagination.dart';
@@ -180,6 +178,7 @@ class AssistantLogic extends GetxController {
   @override
   void onClose() {
     disconnect();
+    NotifyRateCalculator().stop();
     // opusStreamPlayer.dispose();
     super.onClose();
   }
@@ -192,7 +191,6 @@ class AssistantLogic extends GetxController {
       { "text": "进入绑定", "press": startBindDevice },
       { "text": "开始握手", "press": startHandShake },
       { "text": "完成绑定", "press": completeBinding },
-      // { "text": "假弹窗", "press": () => showCustomDialog(Get.context!) },
       { "text": "关机", "press": powerOff },
       { "text": "获取设备信息New", "press": getDeviceInfoV2 },
       { "text": "开启录音(通话录音模式)", "press": () => controlSoundRecording(1, 0) },
@@ -210,8 +208,6 @@ class AssistantLogic extends GetxController {
       { "text": "切换通信模式(BLE/TCP)", "press": () => changeType() },
       { "text": "读取音频文件列表数量", "press": () => readAudioFileListCount() },
       { "text": "读取音频文件列表", "press": () => readAudioFileList() },
-      // { "text": "读取单个音频文件内容", "press": () => readAudioFileContent() },
-      // { "text": "删除单个文件", "press": () => removeAudioFile(fileList[2]['fileName']) },
       { "text": "删除所有文件", "press": () => removeAudioFile(null) },
       { "text": "进入OTA升级模式", "press": startOTA },
       { "text": "开始OTA升级", "press": () => sendUpgradePacket() },
@@ -547,7 +543,15 @@ class AssistantLogic extends GetxController {
 
   // 读取音频文件列表
   readAudioFileList() {
-    if(fileListCount.value == 0) return;
+    if(fileListCount.value == 0) {
+      return Get.showSnackbar(
+        const GetSnackBar(
+          message: "文件数量为0",
+          backgroundColor: Colors.redAccent,
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
     var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileListMessage(fileStart.value, filePageSize.value), 0);
     _sendMessage(bleLockPackage);
   }

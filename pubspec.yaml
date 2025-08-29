@@ -3,7 +3,7 @@ description: "Recording Pen"
 
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.3
+version: 1.0.4
 
 environment:
   sdk: '>=3.4.1 <4.0.0'

@@ -262,7 +262,7 @@ class NotifyRateCalculator {
 
   // 启动每秒统计定时器
   void _startRateTimer() {
-    _rateTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+    _rateTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_isRunning) {
         _currentRate = _currentSecondCount.toDouble();
         _currentSecondCount = 0; // 重置计数器
