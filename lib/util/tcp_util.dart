@@ -24,26 +24,32 @@ class TcpUtil {
   // 新增成员，用于串行控制
   Completer<void>? responseCompleter;
 
+  bool _isConnecting = false;
+
   // 收到的数据总长度(读取文件内容)
   int dataTotal = 0;
 
-  // 保存收到的数据(读取文件内容)
-  List tempData = [];
+  // // 保存收到的数据(读取文件内容)
+  // List tempData = [];
 
   // 连接TCP服务器
   Future<void> connect(String tcpIp, int tcpPort) async {
-    // 防止重复连接
-    if (_socket != null) {
+    // 如果已经在连或已连接，直接返回
+    if (_isConnecting || _socket != null) {
       return;
     }
+
+    _isConnecting = true;
     try {
       _socket = await Socket.connect(tcpIp, tcpPort);
-      print('Connected to: ${_socket!.remoteAddress.address}:${_socket!.remotePort}');
-      ViewLogUtil.info('TCP连接成功--->${_socket!.remoteAddress.address}:${_socket!.remotePort}');
+      ViewLogUtil.info(
+          'TCP连接成功--->${_socket!.remoteAddress.address}:${_socket!.remotePort}');
       startListen();
     } catch (e) {
-      ViewLogUtil.error("TCP连接失败");
-      close();
+      ViewLogUtil.error("TCP连接失败:$e");
+      await close(); // 失败时确保清理
+    } finally {
+      _isConnecting = false;
     }
   }
 
@@ -75,19 +81,24 @@ class TcpUtil {
   // 监听服务器响应
   void startListen() {
     _socket?.listen(
-      (data) {
-        LogUtil.log.i("响应长度==>${data.length}");
-        tempData.addAll(data);
-        LogUtil.log.i("收到的总长度==>${tempData.length}");
+          (data) {
+        // 1️⃣ 轻量日志，不打印巨长内容
+        LogUtil.log.i("TCP 响应片段长度: ${data.length}");
 
-        ViewLogUtil.info('收到TCP服务器响应--->${ByteUtil.uint8ListToHexFull(Uint8List.fromList(data))}');
-        var deviceInfo = GetStorage().read("deviceInfo");
-        BlueToothMessageHandler().handleMessage(data, deviceInfo["deviceId"]);
+        // 4️⃣ 解析丢到 microtask，避免阻塞当前事件循环
+        final deviceInfo = GetStorage().read("deviceInfo");
+        final deviceId = deviceInfo?["deviceId"];
 
-        // 唤醒completer
-        // if (responseCompleter != null && !responseCompleter!.isCompleted) {
-        //   responseCompleter!.complete();
-        // }
+        if (deviceId != null) {
+          // 不 await，让它在下一轮事件循环执行，UI 有机会刷新
+          Future.microtask(() {
+            BlueToothMessageHandler().handleMessage(data, deviceId, isWifi: true);
+          });
+        } else {
+          ViewLogUtil.error("deviceInfo 中没有 deviceId，丢弃本次 TCP 数据");
+        }
+
+        // 需要的话，这里可以考虑做一个“简单的速率统计”，但不要太频繁更新 UI
       },
       onError: (error) {
         ViewLogUtil.error('TCP连接异常: $error');
@@ -97,15 +108,26 @@ class TcpUtil {
         ViewLogUtil.error("TCP连接关闭");
         close();
       },
-      cancelOnError: true
+      cancelOnError: true,
     );
   }
+
   
   // 主动关闭连接
   Future<void> close() async {
-    await _socket?.close();
-    _socket?.destroy();
-    _socket = null;
+    final sock = _socket;
+    _socket = null;        // ⭐ 立刻置空
+
+    if (sock != null) {
+      try {
+        await sock.close();
+        sock.destroy();
+      } catch (e) {
+        ViewLogUtil.error("关闭 TCP 连接出错: $e");
+      }
+    }
+
     ViewLogUtil.info('TCP连接已关闭');
   }
+
 }

@@ -14,126 +14,152 @@ import '../util/ByteUtil.dart';
 import '../util/audio/notify_rate_calculator.dart';
 
 var log = logger_package.Logger();
+
 class BlueToothMessageHandler {
-  // 私有构造函数
   BlueToothMessageHandler._internal();
-
-  // 静态单例引用
   static final BlueToothMessageHandler _instance = BlueToothMessageHandler._internal();
-
-  // 工厂构造函数
   factory BlueToothMessageHandler() => _instance;
 
-  static Map<String, Queue<Uint8List>> queueDataMap = {};
-
-  // 组包
-  static List<int> packageList = [];
+  /// 原来是 Map<String, Queue<Uint8List>>
+  /// 改成：每个设备维护一块连续 buffer，避免大量 List 拷贝
+  static final Map<String, List<int>> _bufferMap = {};
 
   final NotifyRateCalculator rateCalculator = NotifyRateCalculator();
-
   late final AssistantLogic _cachedLogic = Get.find<AssistantLogic>();
 
-  void handleConnectState(String deviceMac, bool state) {
-
-  }
+  void handleConnectState(String deviceMac, bool state) {}
 
   void realAudioMessage(Uint8List bleMsg, String deviceUuid) {
     if (_cachedLogic.isGetRecord) {
       handleMessage(bleMsg, deviceUuid);
     } else {
-      // 直接调用，减少中间层
+      // 实时流音频走快速通道
       NotifyRateCalculator.instance.onNotifyReceived(bleMsg);
-      _cachedLogic.dealOpusMsg(bleMsg); // 直接调用最底层函数
+      _cachedLogic.dealOpusMsg(bleMsg);
     }
   }
 
-  void handleMessage(Uint8List bleMsg, String deviceUuid) async {
-    // 统计notify速率
+  /// 通用组包入口（BLE 和 TCP 共用）
+  void handleMessage(Uint8List bleMsg, String deviceUuid, {isWifi = false}) {
+    // 统计 notify 速率（放到 microtask，降低阻塞）
     Future(() => NotifyRateCalculator.instance.onNotifyReceived(bleMsg));
 
-    // 1. 初始化队列
-    queueDataMap.putIfAbsent(deviceUuid, () => Queue<Uint8List>());
-    queueDataMap[deviceUuid]!.add(bleMsg);
+    // 1. 取出或初始化 buffer
+    final buffer = _bufferMap.putIfAbsent(deviceUuid, () => <int>[]);
 
-    Queue<Uint8List> queue = queueDataMap[deviceUuid]!;
+    // 2. 追加这次收到的数据
+    buffer.addAll(bleMsg);
 
-    // 尝试不断从队列中组包，直到无法再组出完整包
-    while (queue.isNotEmpty) {
-      // 找到第一个包头
-      Uint8List? handleMsg;
-      int startIndex = 0;
-      for (var msg in queue) {
-        if (msg.length >= 2 && msg[0] == BleControlPackage.START[0] && msg[1] == BleControlPackage.START[1]) {
-          handleMsg = msg;
-          break;
-        }
-        startIndex++;
-      }
-      if (handleMsg == null) {
-        // 没有包头，丢弃前面无效数据
-        queue.clear();
+    // 3. 不断尝试从 buffer 里拆出完整包
+    _tryParseBuffer(deviceUuid, isWifi: isWifi);
+  }
+
+  /// 从指定设备的 buffer 中，不断拆出完整数据包
+  void _tryParseBuffer(String deviceUuid, {isWifi = false}) {
+    final buffer = _bufferMap[deviceUuid];
+    if (buffer == null || buffer.isEmpty) return;
+
+    // 安全上限：防止设备发疯导致内存爆炸
+    const int maxBufferLen = 5 * 1024 * 1024; // 5MB，可按需要调整
+    if (buffer.length > maxBufferLen) {
+      log.w('[$deviceUuid] buffer 超过 $maxBufferLen 字节，丢弃旧数据重置');
+      buffer.clear();
+      return;
+    }
+
+    int offset = 0;
+
+    while (true) {
+      final remaining = buffer.length - offset;
+      if (remaining < 7) {
+        // 连头和长度字段都不够，下次再解析
         break;
       }
 
-      // 判断当前包够不够取包长字段
-      if (handleMsg.length < 7) break; // 至少到包长字段
-
-      // 获取包长度（含包头+包尾）
-      int length = ByteUtil.getInt2(handleMsg, 5);
-
-      // 计算当前队列内累计长度
-      int totalLen = 0;
-      int endIndex = -1;
-      for (int i = startIndex; i < queue.length; i++) {
-        totalLen += queue.elementAt(i).length;
-        if (totalLen >= length) {
-          endIndex = i;
+      // 找包头 0xFD, 0xFD（举例，用你 BleControlPackage.START）
+      // 原逻辑只检查队头，现在我们扫描直到找到头
+      int start = offset;
+      while (start + 1 < buffer.length) {
+        if (buffer[start] == BleControlPackage.START[0] &&
+            buffer[start + 1] == BleControlPackage.START[1]) {
           break;
         }
+        start++;
       }
 
-      if (endIndex == -1) break; // 不够长，等下一包
-
-      // 组装完整数据包
-      List<int> fullPacket = [];
-      int remainLen = length;
-      for (int i = startIndex; i <= endIndex; i++) {
-        Uint8List item = queue.elementAt(startIndex); // always use startIndex as elements shift left after removeFirst
-        if (item.length <= remainLen) {
-          fullPacket.addAll(item);
-          remainLen -= item.length;
-          queue.removeFirst();
-        } else {
-          // 如果某个包拆开了，只取所需长度
-          fullPacket.addAll(item.sublist(0, remainLen));
-          // 剩下的部分塞回队首
-          queue.removeFirst();
-          queue.addFirst(item.sublist(remainLen));
-          remainLen = 0;
+      if (start + 1 >= buffer.length) {
+        // 没有找到完整的头，丢弃前面垃圾
+        if (start > 0) {
+          buffer.removeRange(0, start);
         }
-        if (remainLen == 0) break;
+        return;
       }
 
-      // 校验包尾
-      if (fullPacket.length >= 1 && fullPacket.last == 0xFE) {
-        _distributeData(Uint8List.fromList(fullPacket), deviceUuid);
-      } else {
-        // 包不对，数据错误，丢弃本次包
-        //（如果你要更严谨处理，可打印日志但不要崩溃）
-        log.e("包尾不是0xFE，数据异常");
+      // 需要至少 7 字节才能读长度
+      if (buffer.length - start < 7) {
+        // 头已找到，但后面长度字段还没到，等下一次数据
+        if (start > 0) {
+          buffer.removeRange(0, start);
+        }
+        return;
+      }
+
+      // 包长字段在原来代码中是 index 5 开始的 int2（含包头+包尾）
+      final length = ByteUtil.getInt2(Uint8List.fromList(buffer), start + 5);
+
+      if (length <= 0) {
+        log.e('[$deviceUuid] 非法包长: $length，丢弃当前头');
+        // 丢弃这个字节，继续往后找
+        buffer.removeRange(0, start + 1);
+        offset = 0;
         continue;
       }
-      // 队列前面已处理完的数据已remove
+
+      // 判断剩余数据是否足够一个完整包
+      if (buffer.length - start < length) {
+        // 数据还不够，保留从 start 开始到结尾的内容
+        if (start > 0) {
+          buffer.removeRange(0, start);
+        }
+        return;
+      }
+
+      // 拿到完整包
+      final packet = buffer.sublist(start, start + length);
+
+      // 移动 offset / 删除已处理数据
+      buffer.removeRange(0, start + length);
+      offset = 0;
+
+      // 校验包尾
+      if (packet.isEmpty || packet.last != 0xFE) {
+        log.e('[$deviceUuid] 包尾不是 0xFE，丢弃该包');
+        // 继续下一轮
+        continue;
+      }
+
+      // 分发解析
+      _distributeData(Uint8List.fromList(packet), deviceUuid, isWifi: isWifi);
+
+      // 继续 while(true)，尝试解析 buffer 里剩下的数据
+      if (buffer.isEmpty) break;
     }
   }
 
-
-  void _distributeData(Uint8List data, String deviceUuid) {
-    var parse = BleControlPackage.parse(data);
+  void _distributeData(Uint8List data, String deviceUuid, {isWifi = false}) {
+    final parse = BleControlPackage.parse(data);
     if (parse != null) {
-      var parseMessage = parse.parseMessage(MyAppCommon.DEVICE_DEFAULT_KEY);
-      // var parseMessage = parse.parseNotKeyMessage();
-      if (parseMessage) {
+      bool ok = false;
+
+      LogUtil.log.i(isWifi);
+
+      if (isWifi) {
+        ok = parse.parseNotKeyMessage();
+      } else {
+        ok = parse.parseMessage(MyAppCommon.DEVICE_DEFAULT_KEY);
+      }
+
+      if (ok) {
         _receiveMessage(parse.message, parse.deviceId);
       }
     } else {
@@ -141,109 +167,87 @@ class BlueToothMessageHandler {
     }
   }
 
-  /**
-   * 完整的数据解析后的处理方法
-   */
-  _receiveMessage(BleControlMessage ble, String deviceUuid) {
-    // print("是什么===${ble.cmdCategory}");
-    switch(ble.cmdCategory) {
+  /// 完整的数据解析后的处理方法
+  void _receiveMessage(BleControlMessage ble, String deviceUuid) {
+    switch (ble.cmdCategory) {
       case LockControlCmd.CATEGORY_SYSTEM:
-        switch(ble.cmd) {
+        switch (ble.cmd) {
           case LockControlCmd.CMD_SPECIAL_REQUEST_UPGRADE:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealStartOTAReply(ble);
+              Get.find<AssistantLogic>().dealStartOTAReply(ble);
             }
             break;
-
           case LockControlCmd.CMD_SPECIAL_SEND_UPGRADE_DATA:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealSendDataOTAReply(ble);
+              Get.find<AssistantLogic>().dealSendDataOTAReply(ble);
             }
             break;
         }
         break;
 
       case LockControlCmd.CATEGORY_RECORDER:
-        switch(ble.cmd) {
+        switch (ble.cmd) {
           case LockControlCmd.CMD_RECORDER_DEVICE_INFO:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealDeviceInfoReplyMessage(ble);
+              Get.find<AssistantLogic>().dealDeviceInfoReplyMessage(ble);
             }
             break;
 
           case LockControlCmd.CMD_RECORDER_REAL_TIME_STREAMING:
-            var realTimeStreamingMessage = RealTimeStreamingMessage(ble);
+            final realTimeStreamingMessage = RealTimeStreamingMessage(ble);
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealAudioMessage(realTimeStreamingMessage);
+              Get.find<AssistantLogic>().dealAudioMessage(realTimeStreamingMessage);
             }
             break;
 
           case LockControlCmd.CMD_RECORDER_CONTROL_SOUND_RECORD:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.getControlFeedBack(null);
+              Get.find<AssistantLogic>().getControlFeedBack(null);
             }
             break;
 
           case LockControlCmd.CMD_RECORDER_OPEN_WIFI:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealOpenWifiMessage(ble);
+              Get.find<AssistantLogic>().dealOpenWifiMessage(ble);
             }
             break;
 
           case LockControlCmd.CMD_RECORDER_QUERY_TCP_SERVICE:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealTcpServer(ble);
+              Get.find<AssistantLogic>().dealTcpServer(ble);
             }
             break;
 
           case LockControlCmd.CMD_RECORDER_AUDIO_FILE_COUNT:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealAudioListCount(ble);
+              Get.find<AssistantLogic>().dealAudioListCount(ble);
             }
             break;
 
           case LockControlCmd.CMD_RECORDER_AUDIO_FILE_LIST:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealAudioList(ble);
+              Get.find<AssistantLogic>().dealAudioList(ble);
             }
             break;
 
           case LockControlCmd.CMD_RECORDER_AUDIO_FILE_REMOVE:
           case LockControlCmd.CMD_RECORDER_AUDIO_FILE_REMOVE_ALL:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealRemoveFileReply(ble);
+              Get.find<AssistantLogic>().dealRemoveFileReply(ble);
             }
             break;
 
-            // 单个文件读取
-          // case LockControlCmd.CMD_RECORDER_AUDIO_FILE_CONTENT:
-          //   if (Get.isRegistered<AssistantLogic>()) {
-          //     var find = Get.find<AssistantLogic>();
-          //     find.dealAudioFileContent(ble);
-          //   }
-          //   break;
-
-            //设备快速上传
+        // 设备快速上传 → 这里数据量最大
           case LockControlCmd.CMD_RECORDER_AUDIO_FILE_ALL_FAST_UPLOAD:
             if (Get.isRegistered<AssistantLogic>()) {
-              var find = Get.find<AssistantLogic>();
-              find.dealAudioFileContent(ble);
+              // 用 microtask 包一层，先把当前同步栈清掉，给 UI 一点 breathing room
+              Future.microtask(() {
+                Get.find<AssistantLogic>().dealAudioFileContent(ble);
+              });
             }
             break;
         }
         break;
     }
   }
-
-
 }

@@ -160,7 +160,10 @@ class BleMobile implements BlePlatform {
         bleCharacteristic.onValueReceived.listen((value) {
           final bytes = Uint8List.fromList(value);// 复制一份
           // 关键：只入队，立刻返回（不再在回调里跑重活）
-          Future(() => BleCallbackDispatcher.instance.enqueue(deviceId, bytes));
+          Future(() {
+            BleCallbackDispatcher.instance.enqueue(deviceId, bytes);
+            ViewLogUtil.info("back=>${ByteUtil.uint8ListToHexFull(bytes)}");
+          });
         });
 
     await bleCharacteristic.setNotifyValue(true);

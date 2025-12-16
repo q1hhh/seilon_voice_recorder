@@ -37,14 +37,12 @@ class BleSearchLogic extends GetxController {
   void startScan() {
     scanDeviceMap.clear();
     bleFoundBle.startScan(60, (device) async {
-      List<int>? manufacturerData =
-          device.advertisementData.manufacturerData[0x5D];
+      // LogUtil.log.i(device);
+      // List<int>? manufacturerData =
+      //     device.advertisementData.manufacturerData[0x5D];
 
-      if (manufacturerData != null) {
-        scanDeviceMap[ByteUtil.uint8ListToHexFull(
-            Uint8List.fromList(manufacturerData))] = device;
-        update(['scanBle']);
-      }
+      scanDeviceMap[device.device.remoteId.str] = device;
+      update(['scanBle']);
     }, (onError) {
       LogUtil.log.i('ble error:${onError}');
     });
