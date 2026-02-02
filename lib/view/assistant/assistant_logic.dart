@@ -241,7 +241,6 @@ class AssistantLogic extends GetxController {
   }
 
   Future<void> initPcmSound() async {
-    await FlutterPcmSound.init(sampleRate: 16000, channels: 2);
 
     // 当内部剩余 frames < threshold 时会回调要数据（单位=audio frames）
     // await FlutterPcmSound.setFeedThreshold(640 * 10);
@@ -844,7 +843,6 @@ class AssistantLogic extends GetxController {
 
     if (lastSentCommandId == turnOffRecording) {
       lastSentCommandId = -1;
-      FlutterPcmSound.stop();
 
       if (allOpusData.isNotEmpty) {
 
@@ -1017,7 +1015,6 @@ class AssistantLogic extends GetxController {
   }
 
   void dealOpusMsg(Uint8List data) {
-    FlutterPcmSound.feed(GlobalOpusDecoder.decode(data));
     allOpusData.add(data);
   }
 
@@ -1029,10 +1026,6 @@ class AssistantLogic extends GetxController {
 
   Future<void> testDirectPlaySimple(Uint8List opusData) async {
     try {
-
-      MyPcmUtil.decodeOpusToPcm(opusData).then((data) {
-        FlutterPcmSound.feed(data);
-      });
       // final pcmData = await MyPcmUtil.decodeOpusToPcm(opusData);
       // if (pcmData.isEmpty) return;
       //

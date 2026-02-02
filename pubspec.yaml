@@ -86,10 +86,10 @@ dependencies:
   pager: ^0.0.6
 
   seilon_dnr:
-    path: ../seilon_dnr
+    path: plugins/seilon_dnr
 
   dfu_realtek:
-    path: ../dfu_realtek
+    path: plugins/dfu_realtek
 
 dev_dependencies:
   flutter_test:

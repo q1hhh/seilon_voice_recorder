@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="com.seilon.seilon_dnr">
+    <!-- 音频处理需要的权限 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+
+    <!-- Android 11+ 外部存储管理权限 -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
+        android:minSdkVersion="30" />
+
+    <!-- 支持的架构 -->
+    <uses-feature
+        android:name="android.hardware.audio.low_latency"
+        android:required="false" />
+
+</manifest>
