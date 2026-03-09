@@ -82,8 +82,6 @@ class TcpUtil {
   void startListen() {
     _socket?.listen(
           (data) {
-        // 1️⃣ 轻量日志，不打印巨长内容
-        LogUtil.log.i("TCP 响应片段长度: ${data.length}");
 
         // 4️⃣ 解析丢到 microtask，避免阻塞当前事件循环
         final deviceInfo = GetStorage().read("deviceInfo");

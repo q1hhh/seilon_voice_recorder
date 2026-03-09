@@ -72,21 +72,6 @@ class AssistantPage extends StatelessWidget {
         ),
       ),
 
-      leading: Obx(() => Center(
-        child: Text(assistantLogic.dataRate.value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 14,
-            shadows: [
-              Shadow(
-                color: Colors.black26,
-                offset: Offset(0, 1),
-                blurRadius: 2,
-              ),
-            ],
-          ),
-        ),
-      )),
       title: Text(
         assistantLogic.deviceInfo["deviceId"],
         style: const TextStyle(
@@ -233,37 +218,39 @@ class AssistantPage extends StatelessWidget {
         ),
       ),
       children: [
-        Obx(() => Column(
+        Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildStatusItem(
+            // 当前文件状态 - 仅在文件名变化时重建
+            Obx(() => _buildStatusItem(
               "当前文件",
               assistantLogic.currentFileName.value,
               Icons.description,
-            ),
+            )),
             const SizedBox(height: 8),
-            _buildProgressItem(
-              "读取进度",
-              assistantLogic.fileListContent.length,
-              assistantLogic.currentFileSize.value,
-              Colors.blue,
-            ),
+
+            // 读取进度和速率 - 使用独立组件，避免影响其他UI
+            _buildFileReadProgressSection(),
             const SizedBox(height: 12),
-            _buildStatusItem(
+
+            // OTA文件状态 - 仅在OTA文件名变化时重建
+            Obx(() => _buildStatusItem(
               "OTA文件",
               assistantLogic.otaFileName.value,
               Icons.system_update,
-            ),
+            )),
             const SizedBox(height: 8),
-            _buildProgressItem(
+
+            // OTA升级进度 - 仅在进度变化时重建
+            Obx(() => _buildProgressItem(
               "升级进度",
               assistantLogic.otaAlready.value,
               assistantLogic.otaFileSize.value,
               Colors.green,
-            ),
+            )),
             const SizedBox(height: 12),
           ],
-        ))
+        )
       ],),
     );
   }
@@ -284,6 +271,68 @@ class AssistantPage extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
+      ],
+    );
+  }
+
+  // 文件读取进度区域 - 独立组件，避免频繁重建影响其他UI
+  Widget _buildFileReadProgressSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 速率显示 - 仅速率变化时重建这一行
+        Obx(() => Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "BLE速率:${assistantLogic.dataRate.value}\n"
+                  "TCP速率:${assistantLogic.tcpDataRate.value}",
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        )),
+        const SizedBox(height: 4),
+        // 读取进度条 - 仅进度数据变化时重建（使用displayProgress避免频繁重建）
+        Obx(() {
+          final current = assistantLogic.displayProgress.value;
+          final total = assistantLogic.currentFileSize.value;
+          final progress = total > 0 ? current / total : 0.0;
+          final percentage = (progress * 100).toStringAsFixed(1);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "读取进度",
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  Text(
+                    '$percentage%',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Colors.blue.withOpacity(0.2),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$current / $total',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          );
+        }),
       ],
     );
   }

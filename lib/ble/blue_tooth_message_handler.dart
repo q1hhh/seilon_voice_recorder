@@ -41,8 +41,12 @@ class BlueToothMessageHandler {
 
   /// 通用组包入口（BLE 和 TCP 共用）
   void handleMessage(Uint8List bleMsg, String deviceUuid, {isWifi = false}) {
-    // 统计 notify 速率（放到 microtask，降低阻塞）
-    Future(() => NotifyRateCalculator.instance.onNotifyReceived(bleMsg));
+    // 统计 notify 速率（放到 microtask，降低阻塞）：BLE 和 TCP 分开计算
+    if (isWifi) {
+      Future(() => NotifyRateCalculator.tcpInstance.onNotifyReceived(bleMsg));
+    } else {
+      Future(() => NotifyRateCalculator.instance.onNotifyReceived(bleMsg));
+    }
 
     // 1. 取出或初始化 buffer
     final buffer = _bufferMap.putIfAbsent(deviceUuid, () => <int>[]);
@@ -150,8 +154,6 @@ class BlueToothMessageHandler {
     final parse = BleControlPackage.parse(data);
     if (parse != null) {
       bool ok = false;
-
-      LogUtil.log.i(isWifi);
 
       if (isWifi) {
         ok = parse.parseNotKeyMessage();

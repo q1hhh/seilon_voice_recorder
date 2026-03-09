@@ -101,6 +101,12 @@ class AssistantLogic extends GetxController {
   
   // 暂存读取文件的内容
   RxList fileListContent = [].obs;
+  // 用于显示的进度值（节流更新，避免UI卡顿）
+  RxInt displayProgress = 0.obs;
+  // 进度更新节流定时器
+  Timer? _progressThrottleTimer;
+  // 最后一次更新的进度值
+  int _lastProgressUpdate = 0;
 
   // 文件列表总共多少页
   RxInt fileTotalCount = 5.obs;
@@ -142,6 +148,8 @@ class AssistantLogic extends GetxController {
   Completer<void>? responseCompleter;
   // 收到的数据总长度
   int dataCount = 0;
+  // 开始保存文件的时间
+  DateTime? _saveStartTime;
 
   // ==============================
 
@@ -171,6 +179,7 @@ class AssistantLogic extends GetxController {
 
   // 速率
   RxString dataRate = "".obs;
+  RxString tcpDataRate = "".obs;
 
   final dfu = DfuRealtek();
 
@@ -179,9 +188,33 @@ class AssistantLogic extends GetxController {
   @override
   void onClose() {
     disconnect();
-    NotifyRateCalculator().stop();
+    NotifyRateCalculator.instance.stop();
+    NotifyRateCalculator.tcpInstance.stop();
     // opusStreamPlayer.dispose();
+    _progressThrottleTimer?.cancel();
     super.onClose();
+  }
+
+  // 节流更新进度显示（避免频繁UI重建导致卡顿）
+  void _throttleProgressUpdate() {
+    final currentLength = fileListContent.length;
+
+    // 如果进度没有变化，不更新
+    if (currentLength == _lastProgressUpdate) return;
+
+    // 如果定时器不存在或已取消，立即更新并启动定时器
+    if (_progressThrottleTimer == null || !_progressThrottleTimer!.isActive) {
+      displayProgress.value = currentLength;
+      _lastProgressUpdate = currentLength;
+
+      _progressThrottleTimer = Timer(const Duration(milliseconds: 200), () {
+        // 定时器结束后，检查是否有未更新的进度
+        if (fileListContent.length != _lastProgressUpdate) {
+          displayProgress.value = fileListContent.length;
+          _lastProgressUpdate = fileListContent.length;
+        }
+      });
+    }
   }
 
   @override
@@ -258,13 +291,27 @@ class AssistantLogic extends GetxController {
   }
 
   initOpusRealPlay() async {
-    NotifyRateCalculator().start(
+    NotifyRateCalculator.instance.start(
       enableAutoCalculation: true,
       autoCalculationInterval: const Duration(seconds: 1), // 每1秒自动计算
 
       onStatsUpdated: (stats) {
         // 自动接收最新统计数据
         dataRate.value = DataRateFormatter.formatDataRate(stats.dataRatePerSecond);
+      },
+
+      onPerformanceAlert: (alert) {
+        // 自动接收性能警告
+      },
+    );
+
+    NotifyRateCalculator.tcpInstance.start(
+      enableAutoCalculation: true,
+      autoCalculationInterval: const Duration(seconds: 1), // 每1秒自动计算
+
+      onStatsUpdated: (stats) {
+        // 自动接收最新统计数据
+        tcpDataRate.value = DataRateFormatter.formatDataRate(stats.dataRatePerSecond);
       },
 
       onPerformanceAlert: (alert) {
@@ -626,7 +673,8 @@ class AssistantLogic extends GetxController {
 
     TcpUtil().dataTotal = 0;
     fileListContent.clear();
-    fileListContent.refresh();
+    displayProgress.value = 0;
+    _lastProgressUpdate = 0;
 
     print("读取的文件--$readFileName--$readFileSize");
 
@@ -634,6 +682,7 @@ class AssistantLogic extends GetxController {
     currentFileSize.value = readFileSize;
 
     isGetRecord = true;
+    _saveStartTime = DateTime.now();
 
     var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(currentFileName.value, 0, maxFileContentLength.value), 0);
     _sendMessage(bleLockPackage);
@@ -979,6 +1028,12 @@ class AssistantLogic extends GetxController {
     return directory;
   }
 
+  String _buildTimedFileName(String fileName, int seconds) {
+    int dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex == -1) return '${fileName}_${seconds}s';
+    return '${fileName.substring(0, dotIndex)}_${seconds}s${fileName.substring(dotIndex)}';
+  }
+
   Future<void> writeToExternalStorage(Uint8List data, String fileName) async {
     if (await requestStoragePermission()) {
 
@@ -1231,24 +1286,23 @@ class AssistantLogic extends GetxController {
       }
 
       dataCount += audioListContentMessage.fileContent!.length;
-
-      LogUtil.log.i(
-          "收到文件内容的长度${audioListContentMessage.fileContent?.length}, "
-          "文件内容的起始位置${audioListContentMessage.start}, "
-            "文件内容总长度:$dataCount"
-      );
     }
 
     fileListContent.value.addAll(audioListContentMessage.fileContent as List<int>);
-    fileListContent.refresh();
-    LogUtil.log.i("收到的数据长度： ${fileListContent.length}");
+    // 使用节流更新进度显示，避免UI频繁重建导致卡顿
+    _throttleProgressUpdate();
     // responseCompleter?.complete();
     // 如果全部接收完毕
     if ((currentFileSize.value == fileListContent.length) && await requestStoragePermission()) {
 
       isGetRecord = false;
 
-      await writeToExternalStorage(Uint8List.fromList(fileListContent.value.cast<int>()), currentFileName.value);
+      int elapsedSeconds = _saveStartTime != null
+          ? DateTime.now().difference(_saveStartTime!).inSeconds
+          : 0;
+      String timedFileName = _buildTimedFileName(currentFileName.value, elapsedSeconds);
+
+      await writeToExternalStorage(Uint8List.fromList(fileListContent.value.cast<int>()), timedFileName);
 
       if (currentFileName.value.endsWith(".wav")) {
 
@@ -1257,10 +1311,10 @@ class AssistantLogic extends GetxController {
         if (directory == null) return;
 
         var data = await DnrPlugin.processAudioFile(
-          "${directory.path}/${currentFileName.value}",
+          "${directory.path}/$timedFileName",
         );
 
-        await writeToExternalStorage(data!, "DNR_${currentFileName.value}");
+        await writeToExternalStorage(data!, "DNR_$timedFileName");
       }
     }
   }

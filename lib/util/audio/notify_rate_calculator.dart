@@ -7,14 +7,18 @@ class NotifyRateCalculator {
   // 私有构造函数
   NotifyRateCalculator._internal();
 
-  // 静态实例
+  // BLE 静态实例
   static final NotifyRateCalculator _instance = NotifyRateCalculator._internal();
+  // TCP 静态实例
+  static final NotifyRateCalculator _tcpInstance = NotifyRateCalculator._internal();
 
-  // 工厂构造函数，返回单例实例
+  // 工厂构造函数，返回 BLE 单例实例
   factory NotifyRateCalculator() => _instance;
 
-  // 获取实例的静态方法
+  // BLE 实例
   static NotifyRateCalculator get instance => _instance;
+  // TCP 实例
+  static NotifyRateCalculator get tcpInstance => _tcpInstance;
 
   // 基础统计
   int _packetCount = 0;
@@ -230,13 +234,6 @@ class NotifyRateCalculator {
   void _processDataPacket(Uint8List data) {
     // 可以在这里添加数据包分析逻辑
     // 比如：数据包质量检查、格式验证等
-
-    // 示例：检查数据包是否为空或异常
-    if (data.isEmpty) {
-      print('⚠️ 收到空数据包');
-    } else if (data.length > 500) {
-      print('⚠️ 数据包异常大: ${data.length}字节');
-    }
 
     // 示例：简单的数据质量分析
     _analyzeDataQuality(data);
