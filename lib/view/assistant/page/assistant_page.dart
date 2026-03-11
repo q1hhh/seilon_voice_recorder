@@ -324,6 +324,68 @@ class AssistantPage extends StatelessWidget {
     );
   }
 
+  // 文件读取进度区域 - 独立组件，避免频繁重建影响其他UI
+  Widget _buildFileReadProgressSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // 速率显示 - 仅速率变化时重建这一行
+        Obx(() => Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "BLE速率:${assistantLogic.dataRate.value}\n"
+                  "TCP速率:${assistantLogic.tcpDataRate.value}",
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+          ],
+        )),
+        const SizedBox(height: 4),
+        // 读取进度条 - 仅进度数据变化时重建（使用displayProgress避免频繁重建）
+        Obx(() {
+          final current = assistantLogic.displayProgress.value;
+          final total = assistantLogic.currentFileSize.value;
+          final progress = total > 0 ? current / total : 0.0;
+          final percentage = (progress * 100).toStringAsFixed(1);
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    "读取进度",
+                    style: TextStyle(fontSize: 14, color: Colors.grey),
+                  ),
+                  Text(
+                    '$percentage%',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              LinearProgressIndicator(
+                value: progress,
+                backgroundColor: Colors.blue.withOpacity(0.2),
+                valueColor: const AlwaysStoppedAnimation<Color>(Colors.blue),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '$current / $total',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+            ],
+          );
+        }),
+      ],
+    );
+  }
+
   Widget _buildProgressItem(String label, int current, int total, Color color) {
     final progress = total > 0 ? current / total : 0.0;
     final percentage = (progress * 100).toStringAsFixed(1);

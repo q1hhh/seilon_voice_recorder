@@ -2,7 +2,7 @@ class LockControlCmd {
 
   static const CATEGORY_SYSTEM    = 0x01;
   static const CATEGORY_NET_WORK  = 0x02;
-  static const CATEGORY_RECORDER  = 0x12;
+  static const CATEGORY_RECORDER  = 0x15;
 
   //0x01系统类型======================================================================================
   static const CMD_SYSTEM_QUERY_DEVICE_INFO       = 0x01;//查询设备信息

@@ -61,6 +61,55 @@ class BleControlPackage {
     return bleControlPackage;
   }
 
+
+  ///组装数据成协议字节
+  Uint8List toBytesNotKey() {
+    var data = getAlignData(message.toBytes());
+
+    length = (data.length & 0xFFFF) + 32;
+    dataCheck = message.check;
+
+    Uint8List bytes = Uint8List(length & 0xFFFF);
+    bytes.setRange(0, 2, START);
+
+    bytes.setRange(2, 4, ByteUtil.getUint8ListOfInt2(sn));
+
+    bytes[4] = (pid & 0xFFFF);
+
+    bytes.setRange(5, 7, ByteUtil.getUint8ListOfInt2(length & 0xFFFF));
+    bytes[7] = version;
+
+    bytes[8] = send;
+    bytes[9] = recipient;
+
+    if (deviceId.length == 12) {
+      deviceId = deviceId + "0000";
+    }
+
+    bytes.setRange(10, 18, ByteUtil.hexStringToUint8List(deviceId)!);
+
+    if (gatewayId.length == 12) {
+      gatewayId = gatewayId + "0000";
+    }
+
+    bytes.setRange(18, 26, ByteUtil.hexStringToUint8List(gatewayId)!);
+
+    bytes[26] = cmdCategory;
+    bytes[27] = cmd;
+
+    bytes.setRange(28,  28 + data.length, data);
+
+    bytes[length - 1] = END;
+
+    bytes[length - 3] = dataCheck;
+    bytes[length - 4] = dataCheckLength;
+    check = countCheck(data);
+
+    bytes[length - 2] = check;
+
+    return bytes;
+  }
+
   ///组装数据成协议字节
   Uint8List toBytes(String key) {
     var alignData = getAlignData(message.toBytes());

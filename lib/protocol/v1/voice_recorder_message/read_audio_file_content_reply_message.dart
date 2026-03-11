@@ -21,14 +21,14 @@ class ReadAudioFileContentReplyMessage extends BleControlMessage {
       start = ByteUtil.getInt(data, 1);
       // 取文件内容
       fileContent = data.sublist(5, data.length - 2);
-      fileContentCrc = data.sublist(data.length - 2);
-
-      var crcRes = Crc16Util.calculateBigEndian(Uint8List.fromList(fileContent as List<int>));
-      // LogUtil.log.i("设备回复的crc====>${fileContentCrc}");
-      // LogUtil.log.i("解析的crc====>$crcRes");
-      if(fileContentCrc?[0] != crcRes[0] || fileContentCrc?[1] != crcRes[1]) {
-        LogUtil.log.e("CRC16错误: 设备回复的crc====>${fileContentCrc}, 解析的crc====>$crcRes");
-      }
+      // fileContentCrc = data.sublist(data.length - 2);
+      //
+      // var crcRes = Crc16Util.calculateBigEndian(Uint8List.fromList(fileContent as List<int>));
+      // // LogUtil.log.i("设备回复的crc====>${fileContentCrc}");
+      // // LogUtil.log.i("解析的crc====>$crcRes");
+      // if(fileContentCrc?[0] != crcRes[0] || fileContentCrc?[1] != crcRes[1]) {
+      //   LogUtil.log.e("CRC16错误: 设备回复的crc====>${fileContentCrc}, 解析的crc====>$crcRes");
+      // }
     }
 
   }

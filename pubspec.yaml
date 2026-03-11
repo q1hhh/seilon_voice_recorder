@@ -3,7 +3,7 @@ description: "Recording Pen"
 
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 
-version: 1.0.4
+version: 1.0.11
 
 environment:
   sdk: '>=3.4.1 <4.0.0'
@@ -44,15 +44,15 @@ dependencies:
   flutter_blue_plus: ^1.34.5
   logger: ^2.3.0
   encrypt: ^5.0.3
-  device_info_plus: ^10.1.0
+  device_info_plus: ^11.5.0
   package_info_plus: ^8.3.0
   shared_preferences: ^2.2.3
   crypto: ^3.0.3
   network_info_plus: ^6.0.1
-  permission_handler: ^11.3.1
+  permission_handler: ^12.0.0+1
  
   dropdown_button2: ^2.3.9 #下拉菜单
-  flutter_local_notifications: ^17.2.2
+  flutter_local_notifications: ^19.4.2
   flutter_timezone: ^3.0.1
   path_provider: ^2.1.4
   event_bus: ^2.0.0

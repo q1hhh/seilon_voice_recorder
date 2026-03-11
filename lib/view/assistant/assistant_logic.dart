@@ -31,6 +31,7 @@ import 'package:flutter_pcm_sound/flutter_pcm_sound.dart';
 import 'package:get/get.dart';
 import 'package:get_storage/get_storage.dart';
 import 'package:intl/intl.dart';
+import 'package:network_info_plus/network_info_plus.dart';
 import 'package:opus_dart/opus_dart.dart';
 import 'package:opus_dart/wrappers/opus_decoder.dart';
 import 'package:opus_flutter/opus_flutter.dart' as opus_flutter;
@@ -100,6 +101,12 @@ class AssistantLogic extends GetxController {
   
   // 暂存读取文件的内容
   RxList fileListContent = [].obs;
+  // 用于显示的进度值（节流更新，避免UI卡顿）
+  RxInt displayProgress = 0.obs;
+  // 进度更新节流定时器
+  Timer? _progressThrottleTimer;
+  // 最后一次更新的进度值
+  int _lastProgressUpdate = 0;
 
   // 文件列表总共多少页
   RxInt fileTotalCount = 5.obs;
@@ -141,6 +148,8 @@ class AssistantLogic extends GetxController {
   Completer<void>? responseCompleter;
   // 收到的数据总长度
   int dataCount = 0;
+  // 开始保存文件的时间
+  DateTime? _saveStartTime;
 
   // ==============================
 
@@ -170,6 +179,7 @@ class AssistantLogic extends GetxController {
 
   // 速率
   RxString dataRate = "".obs;
+  RxString tcpDataRate = "".obs;
 
   final dfu = DfuRealtek();
 
@@ -178,9 +188,33 @@ class AssistantLogic extends GetxController {
   @override
   void onClose() {
     disconnect();
-    NotifyRateCalculator().stop();
+    NotifyRateCalculator.instance.stop();
+    NotifyRateCalculator.tcpInstance.stop();
     // opusStreamPlayer.dispose();
+    _progressThrottleTimer?.cancel();
     super.onClose();
+  }
+
+  // 节流更新进度显示（避免频繁UI重建导致卡顿）
+  void _throttleProgressUpdate() {
+    final currentLength = fileListContent.length;
+
+    // 如果进度没有变化，不更新
+    if (currentLength == _lastProgressUpdate) return;
+
+    // 如果定时器不存在或已取消，立即更新并启动定时器
+    if (_progressThrottleTimer == null || !_progressThrottleTimer!.isActive) {
+      displayProgress.value = currentLength;
+      _lastProgressUpdate = currentLength;
+
+      _progressThrottleTimer = Timer(const Duration(milliseconds: 200), () {
+        // 定时器结束后，检查是否有未更新的进度
+        if (fileListContent.length != _lastProgressUpdate) {
+          displayProgress.value = fileListContent.length;
+          _lastProgressUpdate = fileListContent.length;
+        }
+      });
+    }
   }
 
   @override
@@ -193,8 +227,9 @@ class AssistantLogic extends GetxController {
       { "text": "完成绑定", "press": completeBinding },
       { "text": "关机", "press": powerOff },
       { "text": "获取设备信息New", "press": getDeviceInfoV2 },
-      { "text": "开启录音(通话录音模式)", "press": () => controlSoundRecording(1, 0) },
-      { "text": "开启录音(会议录音模式)", "press": () => controlSoundRecording(1, 1) },
+      { "text": "开启录音(1路)", "press": () => controlSoundRecording(1, 1) },
+      { "text": "开启录音(2路)", "press": () => controlSoundRecording(1, 2) },
+      { "text": "开启录音(4路)", "press": () => controlSoundRecording(1, 4) },
       { "text": "关闭录音New", "press": () => controlSoundRecording(0, 0) },
       { "text": "打开U盘", "press": () => openUDisk(true) },
       { "text": "关闭U盘", "press": () => openUDisk(false) },
@@ -202,7 +237,7 @@ class AssistantLogic extends GetxController {
       { "text": "关闭屏幕亮度", "press": () => screenControl(false) },
       { "text": "打开WIFI", "press": () => openWifi(true) },
       { "text": "关闭WIFI", "press": () => openWifi(false) },
-      { "text": "连接WIFI", "press": () => connectWifi() },
+      { "text": "连接WIFI", "press": () => connectWifiAndTcp() },
       { "text": "查询TCP服务", "press": () => readTcpServer() },
       { "text": "TCP连接", "press": () => connectTcp() },
       { "text": "切换通信模式(BLE/TCP)", "press": () => changeType() },
@@ -241,6 +276,7 @@ class AssistantLogic extends GetxController {
   }
 
   Future<void> initPcmSound() async {
+    // await FlutterPcmSound.init(sampleRate: 16000, channels: 2);
 
     // 当内部剩余 frames < threshold 时会回调要数据（单位=audio frames）
     // await FlutterPcmSound.setFeedThreshold(640 * 10);
@@ -255,13 +291,27 @@ class AssistantLogic extends GetxController {
   }
 
   initOpusRealPlay() async {
-    NotifyRateCalculator().start(
+    NotifyRateCalculator.instance.start(
       enableAutoCalculation: true,
       autoCalculationInterval: const Duration(seconds: 1), // 每1秒自动计算
 
       onStatsUpdated: (stats) {
         // 自动接收最新统计数据
         dataRate.value = DataRateFormatter.formatDataRate(stats.dataRatePerSecond);
+      },
+
+      onPerformanceAlert: (alert) {
+        // 自动接收性能警告
+      },
+    );
+
+    NotifyRateCalculator.tcpInstance.start(
+      enableAutoCalculation: true,
+      autoCalculationInterval: const Duration(seconds: 1), // 每1秒自动计算
+
+      onStatsUpdated: (stats) {
+        // 自动接收最新统计数据
+        tcpDataRate.value = DataRateFormatter.formatDataRate(stats.dataRatePerSecond);
       },
 
       onPerformanceAlert: (alert) {
@@ -485,9 +535,71 @@ class AssistantLogic extends GetxController {
   }
 
   // 连接wifi
+
+  Future<void> connectWifiAndTcp() async {
+    final ssid = DeviceInfoController().ssid.value.trim();
+    final pwd  = DeviceInfoController().password.value.trim();
+
+    if (ssid.isEmpty) {
+      ViewLogUtil.error('WiFi 名称为空，不能连接');
+      return;
+    }
+
+    // 1️⃣ 连接 Wi-Fi
+    final ok = await WiFiForIoTPlugin.connect(
+      ssid,
+      password: pwd.isEmpty ? null : pwd,
+      security: pwd.isEmpty ? NetworkSecurity.NONE : NetworkSecurity.WPA,
+      joinOnce: true,
+      withInternet: false,      // ⭐ 设备热点没外网，用 false
+      // 如果其实是设备热点、没外网：这里改成 false
+    );
+
+    if (!ok) {
+      ViewLogUtil.error("wifi: $ssid 连接失败");
+      return;
+    }
+
+    ViewLogUtil.info("wifi: $ssid 连接发起成功（等待获取 IP...）");
+
+    // 2️⃣ 强制使用这个 Wi-Fi（否则安卓可能还走移动数据）
+    await WiFiForIoTPlugin.forceWifiUsage(true);
+
+    // 3️⃣ 等待获取 IP
+    final ip = await _waitForWifiIp(timeout: const Duration(seconds: 10));
+    ViewLogUtil.info(ip);
+  }
+
+  Future<String?> _waitForWifiIp({Duration timeout = const Duration(seconds: 10)}) async {
+    final info = NetworkInfo();
+    final end  = DateTime.now().add(timeout);
+
+    while (DateTime.now().isBefore(end)) {
+      final wifiIP = await WiFiForIoTPlugin.getIP(); // 或 WiFiForIoTPlugin.getIP()
+      if (wifiIP != null &&
+          wifiIP.isNotEmpty &&
+          wifiIP != "0.0.0.0") {
+        return wifiIP;
+      }
+
+      await Future.delayed(const Duration(milliseconds: 500));
+    }
+
+    return null; // 超时还拿不到 IP
+  }
+
+
   connectWifi() async {
     Clipboard.setData(ClipboardData(text: DeviceInfoController().password.value.trim()));
-    AppSettings.openAppSettings(type: AppSettingsType.wifi);
+    // AppSettings.openAppSettings(type: AppSettingsType.wifi);
+
+    if (!await Permission.location.isGranted) {
+      var result = await Permission.location.request();
+      if (!result.isGranted) {
+        ViewLogUtil.error('未授予定位权限');
+        return;
+      }
+    }
 
     // 连接 WPA 网络
     // 传true，强制使用wifi
@@ -496,21 +608,21 @@ class AssistantLogic extends GetxController {
     //   bool res = await WiFiForIoTPlugin.disconnect();
     //   LogUtil.log.i("连接前断开的结果--->$res");
     // }
-    //
-    // await Future.delayed(Duration(seconds:2));
-    // var connect = await WiFiForIoTPlugin.connect(
-    //   DeviceInfoController().ssid.value,
-    //   password: DeviceInfoController().password.value,
-    //   security: NetworkSecurity.WPA,
-    //   withInternet: true,
-    // );
-    //
-    // if(connect) {
-    //   ViewLogUtil.info("wifi: ${ DeviceInfoController().ssid.value} 连接成功");
-    // }
-    // else {
-    //   ViewLogUtil.error("wifi: ${ DeviceInfoController().ssid.value} 连接失败");
-    // }
+
+    bool connect = await WiFiForIoTPlugin.connect(
+      DeviceInfoController().ssid.value,         // 🔧 目标 SSID
+      password: DeviceInfoController().password.value, // 密码（如开放网络可留空）
+      security: NetworkSecurity.WPA,
+      joinOnce: true,
+      withInternet: true,  // 设备热点一般无外网
+    );
+
+    if(connect) {
+      ViewLogUtil.info("wifi: ${ DeviceInfoController().ssid.value} 连接成功");
+    }
+    else {
+      ViewLogUtil.error("wifi: ${ DeviceInfoController().ssid.value} 连接失败");
+    }
   }
 
   // 查询TCP服务
@@ -560,9 +672,9 @@ class AssistantLogic extends GetxController {
     if(fileList.isEmpty) return;
 
     TcpUtil().dataTotal = 0;
-    TcpUtil().tempData.clear();
     fileListContent.clear();
-    fileListContent.refresh();
+    displayProgress.value = 0;
+    _lastProgressUpdate = 0;
 
     print("读取的文件--$readFileName--$readFileSize");
 
@@ -570,6 +682,7 @@ class AssistantLogic extends GetxController {
     currentFileSize.value = readFileSize;
 
     isGetRecord = true;
+    _saveStartTime = DateTime.now();
 
     var bleLockPackage = BleControlPackage.toBleLockPackage(ReadAudioFileContentMessage(currentFileName.value, 0, maxFileContentLength.value), 0);
     _sendMessage(bleLockPackage);
@@ -796,9 +909,10 @@ class AssistantLogic extends GetxController {
 
   // 通用发送消息方法
   void _sendMessage(BleControlPackage bleLockPackage) async {
-    var bytes = bleLockPackage.toBytes(MyAppCommon.DEVICE_DEFAULT_KEY);
+
 
     if(DeviceInfoController().messageType.value == "BLE") {
+      var bytes = bleLockPackage.toBytes(MyAppCommon.DEVICE_DEFAULT_KEY);
       // 从连接的设备列表中找到对应的设备对象
       var connectedDevices = BleService().getConnectedDevices();
       var deviceMatches = connectedDevices.where(
@@ -823,6 +937,7 @@ class AssistantLogic extends GetxController {
     }
     // TCP模式
     else {
+      var bytes = bleLockPackage.toBytesNotKey();
       TcpUtil().sendData(bytes);
     }
 
@@ -843,6 +958,7 @@ class AssistantLogic extends GetxController {
 
     if (lastSentCommandId == turnOffRecording) {
       lastSentCommandId = -1;
+      // FlutterPcmSound.stop();
 
       if (allOpusData.isNotEmpty) {
 
@@ -910,6 +1026,12 @@ class AssistantLogic extends GetxController {
       }
     }
     return directory;
+  }
+
+  String _buildTimedFileName(String fileName, int seconds) {
+    int dotIndex = fileName.lastIndexOf('.');
+    if (dotIndex == -1) return '${fileName}_${seconds}s';
+    return '${fileName.substring(0, dotIndex)}_${seconds}s${fileName.substring(dotIndex)}';
   }
 
   Future<void> writeToExternalStorage(Uint8List data, String fileName) async {
@@ -1015,6 +1137,7 @@ class AssistantLogic extends GetxController {
   }
 
   void dealOpusMsg(Uint8List data) {
+    // FlutterPcmSound.feed(GlobalOpusDecoder.decode(data));
     allOpusData.add(data);
   }
 
@@ -1026,6 +1149,10 @@ class AssistantLogic extends GetxController {
 
   Future<void> testDirectPlaySimple(Uint8List opusData) async {
     try {
+
+      // MyPcmUtil.decodeOpusToPcm(opusData).then((data) {
+      //   FlutterPcmSound.feed(data);
+      // });
       // final pcmData = await MyPcmUtil.decodeOpusToPcm(opusData);
       // if (pcmData.isEmpty) return;
       //
@@ -1159,25 +1286,23 @@ class AssistantLogic extends GetxController {
       }
 
       dataCount += audioListContentMessage.fileContent!.length;
-
-      LogUtil.log.i(
-          "收到文件内容的长度${audioListContentMessage.fileContent?.length}, "
-          "文件内容的起始位置${audioListContentMessage.start}, "
-          "收到数据的总长度: ${TcpUtil().tempData.length},"
-            "文件内容总长度:$dataCount"
-      );
     }
 
     fileListContent.value.addAll(audioListContentMessage.fileContent as List<int>);
-    fileListContent.refresh();
-    LogUtil.log.i("收到的数据长度： ${fileListContent.length}");
+    // 使用节流更新进度显示，避免UI频繁重建导致卡顿
+    _throttleProgressUpdate();
     // responseCompleter?.complete();
     // 如果全部接收完毕
     if ((currentFileSize.value == fileListContent.length) && await requestStoragePermission()) {
 
       isGetRecord = false;
 
-      await writeToExternalStorage(Uint8List.fromList(fileListContent.value.cast<int>()), currentFileName.value);
+      int elapsedSeconds = _saveStartTime != null
+          ? DateTime.now().difference(_saveStartTime!).inSeconds
+          : 0;
+      String timedFileName = _buildTimedFileName(currentFileName.value, elapsedSeconds);
+
+      await writeToExternalStorage(Uint8List.fromList(fileListContent.value.cast<int>()), timedFileName);
 
       if (currentFileName.value.endsWith(".wav")) {
 
@@ -1186,10 +1311,10 @@ class AssistantLogic extends GetxController {
         if (directory == null) return;
 
         var data = await DnrPlugin.processAudioFile(
-          "${directory.path}/${currentFileName.value}",
+          "${directory.path}/$timedFileName",
         );
 
-        await writeToExternalStorage(data!, "DNR_${currentFileName.value}");
+        await writeToExternalStorage(data!, "DNR_$timedFileName");
       }
     }
   }
