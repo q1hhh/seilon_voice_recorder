@@ -92,11 +92,11 @@ class BleSearchPage extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        iconTheme: const IconThemeData(color: AppColors.textColor),
         title: const Text(
           "蓝牙设备",
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textColor,
             fontSize: 22,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.2,
@@ -104,7 +104,7 @@ class BleSearchPage extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: const Icon(Icons.refresh, color: AppColors.textColor),
             onPressed: controller.reStartScan,
           ),
         ],
@@ -156,7 +156,7 @@ class BleSearchPage extends StatelessWidget {
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: BackdropFilter(
-                              filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                              filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
                               child: Container(
                                 decoration: BoxDecoration(
                                   color: AppColors.cardColor,

@@ -32,6 +32,9 @@ class AssistantPage extends StatelessWidget {
                 // 降噪控制卡片
                 _buildNoiseReductionCard(),
 
+                // 传输速率卡片
+                _buildTransmissionRatesCard(),
+
                 // 文件状态信息卡片
                 _buildFileStatusCard(),
 
@@ -55,36 +58,22 @@ class AssistantPage extends StatelessWidget {
     return AppBar(
       backgroundColor: Colors.transparent,
       elevation: 0,
-      iconTheme: const IconThemeData(color: Colors.white),
+      iconTheme: const IconThemeData(color: AppColors.textColor),
       leading: Obx(() => Center(
         child: Text(assistantLogic.dataRate.value,
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.textColor,
             fontSize: 14,
-            shadows: [
-              Shadow(
-                color: Colors.black26,
-                offset: Offset(0, 1),
-                blurRadius: 2,
-              ),
-            ],
           ),
         ),
       )),
       title: Text(
         assistantLogic.deviceInfo["deviceId"],
         style: const TextStyle(
-          color: Colors.white,
+          color: AppColors.textColor,
           fontSize: 20,
           fontWeight: FontWeight.w600,
           letterSpacing: 1.2,
-          shadows: [
-            Shadow(
-              color: Colors.black26,
-              offset: Offset(0, 1),
-              blurRadius: 2,
-            ),
-          ],
         ),
       ),
       actions: [
@@ -94,16 +83,16 @@ class AssistantPage extends StatelessWidget {
             onPressed: () {
               _showDisconnectDialog();
             },
-            icon: const Icon(Icons.bluetooth_disabled, color: Colors.white, size: 16),
+            icon: const Icon(Icons.bluetooth_disabled, color: AppColors.errorColor, size: 16),
             label: const AutoSizeText(
               "断开连接",
-              style: TextStyle(color: Colors.white, fontSize: 14),
+              style: TextStyle(color: AppColors.errorColor, fontSize: 14, fontWeight: FontWeight.bold),
             ),
             style: TextButton.styleFrom(
-              backgroundColor: Colors.white.withOpacity(0.1),
+              backgroundColor: AppColors.errorColor.withOpacity(0.1),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
-                side: BorderSide(color: Colors.white.withOpacity(0.2)),
+                side: BorderSide(color: AppColors.errorColor.withOpacity(0.2)),
               ),
             ),
           ),
@@ -118,7 +107,7 @@ class AssistantPage extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(16),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: Container(
             decoration: BoxDecoration(
               color: AppColors.cardColor,
@@ -235,6 +224,97 @@ class AssistantPage extends StatelessWidget {
           )
         ],
       )),
+    );
+  }
+
+  Widget _buildTransmissionRatesCard() {
+    return _buildGlassCard(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.infoColor.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.speed, color: AppColors.infoColor, size: 20),
+                ),
+                const SizedBox(width: 12),
+                const Text(
+                  '传输速率',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textColor,
+                    letterSpacing: 1,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: Obx(() => _buildRateItem(
+                    "BLE 速率",
+                    assistantLogic.dataRate.value,
+                    Icons.bluetooth,
+                    AppColors.primaryColor,
+                  )),
+                ),
+                Container(
+                  width: 1,
+                  height: 30,
+                  color: Colors.white.withOpacity(0.1),
+                ),
+                Expanded(
+                  child: Obx(() => _buildRateItem(
+                    "TCP 速率",
+                    assistantLogic.tcpDataRate.value,
+                    Icons.lan,
+                    AppColors.secondaryColor,
+                  )),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRateItem(String label, String value, IconData icon, Color color) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 14, color: color.withOpacity(0.7)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value.isEmpty ? "0 KB/s" : value,
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: color,
+            shadows: [
+              Shadow(color: color.withOpacity(0.3), blurRadius: 8),
+            ],
+          ),
+        ),
+      ],
     );
   }
 
@@ -581,7 +661,7 @@ class AssistantPage extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(20),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
@@ -692,7 +772,7 @@ class AssistantPage extends StatelessWidget {
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
             child: Container(
               padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(

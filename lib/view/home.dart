@@ -18,7 +18,7 @@ class HomePage extends StatelessWidget {
         title: const Text(
           "工具箱",
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.textColor,
             fontSize: 22,
             fontWeight: FontWeight.bold,
             letterSpacing: 1.2,
@@ -26,7 +26,7 @@ class HomePage extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+            icon: const Icon(Icons.settings_outlined, color: AppColors.textColor),
             onPressed: () => Get.toNamed("/settings"),
           ),
         ],
@@ -101,7 +101,7 @@ class ToolCard extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             decoration: BoxDecoration(
