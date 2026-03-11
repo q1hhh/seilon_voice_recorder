@@ -1,1 +1,22 @@
-<?xml version="1.0" standalone="no"?><!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd"><svg t="1752580508912" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg" p-id="12563" xmlns:xlink="http://www.w3.org/1999/xlink" width="64" height="64"><path d="M528.384 534.0672m-376.1664 0a376.1664 376.1664 0 1 0 752.3328 0 376.1664 376.1664 0 1 0-752.3328 0Z" fill="#8CECFF" p-id="12564"></path><path d="M524.4416 605.8496A105.5232 105.5232 0 0 0 629.76 500.3264V392.1408a105.5232 105.5232 0 1 0-211.0464 0v108.1856a105.5232 105.5232 0 0 0 105.728 105.5232z" fill="#FFDE73" p-id="12565"></path><path d="M745.4208 505.9072a35.84 35.84 0 0 0-71.68 0 144.5376 144.5376 0 1 1-289.0752 0 35.84 35.84 0 0 0-71.68 0 216.576 216.576 0 0 0 180.736 213.248v56.9856a35.84 35.84 0 0 0 71.68 0v-57.088a216.576 216.576 0 0 0 180.0192-213.1456z" fill="#FFDE73" p-id="12566"></path><path d="M511.4368 60.6208a443.8016 443.8016 0 1 0 443.8016 443.8016 444.3648 444.3648 0 0 0-443.8016-443.8016z m0 841.5232a397.7216 397.7216 0 1 1 397.7216-397.7216 398.1824 398.1824 0 0 1-397.7216 397.7216z" fill="#474747" p-id="12567"></path><path d="M511.4368 577.7408a110.2848 110.2848 0 0 0 110.1824-110.1824V378.2656a110.1824 110.1824 0 0 0-220.16 0v89.2928a110.336 110.336 0 0 0 109.9776 110.1824z m-64.1024-199.68a64.1024 64.1024 0 0 1 128 0v89.4976a64.1024 64.1024 0 0 1-128 0z" fill="#474747" p-id="12568"></path><path d="M714.1376 449.8432a23.04 23.04 0 0 0-23.04 23.04 178.7392 178.7392 0 1 1-357.4784 0 23.04 23.04 0 1 0-46.08 0 225.28 225.28 0 0 0 202.1376 223.6928v78.592a23.04 23.04 0 0 0 46.08 0V696.32A225.28 225.28 0 0 0 737.28 472.8832a23.0912 23.0912 0 0 0-23.1424-23.04z" fill="#474747" p-id="12569"></path></svg>
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Aurora Theme App Icon -->
+  <rect width="1024" height="1024" rx="220" fill="url(#aurora_gradient)"/>
+  
+  <!-- Glassmorphism Background Circle -->
+  <circle cx="512" cy="512" r="320" fill="white" fill-opacity="0.15"/>
+  <circle cx="512" cy="512" r="320" stroke="white" stroke-opacity="0.2" stroke-width="4"/>
+  
+  <!-- Stylized Microphone Symbol -->
+  <rect x="422" y="300" width="180" height="320" rx="90" fill="white"/>
+  <path d="M302 480C302 596.041 396.041 690 512.081 690C628.122 690 722.163 596.041 722.163 480" stroke="white" stroke-width="50" stroke-linecap="round"/>
+  <rect x="487" y="690" width="50" height="120" fill="white"/>
+  <rect x="382" y="810" width="260" height="40" rx="20" fill="white"/>
+
+  <defs>
+    <linearGradient id="aurora_gradient" x1="0" y1="0" x2="1024" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#D946EF"/> <!-- Fuchsia -->
+      <stop offset="0.5" stop-color="#6366F1"/> <!-- Indigo -->
+      <stop offset="1" stop-color="#0EA5E9"/> <!-- Sky Blue -->
+    </linearGradient>
+  </defs>
+</svg>
