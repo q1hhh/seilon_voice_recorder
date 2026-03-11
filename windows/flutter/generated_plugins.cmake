@@ -4,7 +4,9 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   flutter_localization
+  flutter_sound
   flutter_timezone
+  opus_flutter_windows
   permission_handler_windows
   screen_retriever_windows
   window_manager

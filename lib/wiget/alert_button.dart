@@ -22,43 +22,41 @@ class AlertButton extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         SizedBox(
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.grey,
-              foregroundColor: Colors.white,
-              elevation: 2,
-              shadowColor: AppColors.shadowColor.withOpacity(0.3),
+          child: TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: AppColors.textSecondary,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: Colors.white.withOpacity(0.2)),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             ),
             onPressed: () {
               cancelCallback();
             },
-            child: Text(cancelText!, style: TextStyle(fontSize: 15),),
+            child: Text(cancelText!, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),),
           ),
         ),
-        SizedBox(width: 20,),
+        const SizedBox(width: 20,),
         SizedBox(
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryColor,
+              backgroundColor: AppColors.primaryColor.withOpacity(0.8),
               foregroundColor: Colors.white,
-              elevation: 2,
-              shadowColor: AppColors.shadowColor.withOpacity(0.3),
+              elevation: 0,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(12),
               ),
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             ),
             onPressed: () {
               confirmCallback();
             },
-            child: Text(confirmText!, style: TextStyle(fontSize: 15),),
+            child: Text(confirmText!, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),),
           ),
         ),
       ],
     );
   }
 }
+

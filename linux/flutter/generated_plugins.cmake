@@ -4,6 +4,7 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   flutter_localization
+  flutter_sound
   screen_retriever_linux
   window_manager
 )
